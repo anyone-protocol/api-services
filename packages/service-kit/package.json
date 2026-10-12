@@ -1,0 +1,6 @@
+{
+  "name": "@anyone-protocol/service-kit",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts"
+}
