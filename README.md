@@ -18,6 +18,8 @@ Bun monorepo for Anyone Protocol API services. Each service under `apps/` builds
 ├── bun.lock            one lockfile for the whole tree
 ├── tsconfig.json       one TypeScript configuration for the whole tree
 ├── tests/              checks on the repository itself
+├── scripts/            repository tooling used by continuous integration
+├── .github/            workflows
 ├── apps/
 │   └── <service>/
 │       ├── Dockerfile
@@ -81,6 +83,31 @@ The image holds the production dependencies of that one service, the service's s
 ## Bun release
 
 One Bun release is used everywhere. It is named in the `packageManager` field of [package.json](package.json) and in the `FROM` lines of every Dockerfile. To move to another release, change all of them in one commit, run `bun install` with the new release and commit the lockfile. `bun test` fails while they disagree.
+
+## Continuous integration
+
+[.github/workflows/ci.yaml](.github/workflows/ci.yaml) runs on every push and pull request. It installs with the frozen lockfile and runs `bun run check`.
+
+On the default branch it then publishes images to `ghcr.io/anyone-protocol/api-services/<service>`, tagged with the full commit SHA. Only the services affected by the push are published:
+
+| Changed path | Published |
+| ------------ | --------- |
+| `apps/<service>/` | that service |
+| `packages/<package>/` | every service that depends on the package, directly or through another package |
+| `package.json`, `bun.lock`, `tsconfig.json`, `.dockerignore` | every service |
+| anything else | nothing |
+
+The selection is made by [scripts/affected-services.ts](scripts/affected-services.ts), which reads the dependency graph from the workspace manifests. The `plan` job prints the decision and the reason for each service in its log and in the run summary. To see what a range of commits would publish:
+
+```sh
+bun scripts/affected-services.ts --base <sha> --head <sha>
+```
+
+A service that a push did not affect has no image tagged with that commit. Its newest image carries the SHA of the last commit that did affect it.
+
+To publish services at a commit regardless of what changed, run the workflow by hand on the default branch (Actions, CI, Run workflow). `services` takes `all` or a space separated list.
+
+Nothing is deployed by continuous integration.
 
 ## Adding a service
 
@@ -150,6 +177,8 @@ The example adds a service named `example-service`.
    ```
 
 6. Add the service to the table at the top of this file and commit `bun.lock` with the new directory.
+
+No workflow changes are needed. Continuous integration finds services by listing `apps/`, and the first push that contains the new service publishes its image.
 
 ## Adding a shared package
 
