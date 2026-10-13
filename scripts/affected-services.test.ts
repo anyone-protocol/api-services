@@ -32,7 +32,7 @@ describe('affectedServices', () => {
   });
 
   it('selects nothing for files that enter no image', () => {
-    const files = ['README.md', '.github/workflows/ci.yaml', 'operations/alpha-stage.hcl', 'tests/workspace.test.ts'];
+    const files = ['README.md', '.github/workflows/ci.yaml', 'operations/alpha-stage.hcl', 'docs/notes.md'];
 
     expect(affectedServices(files, workspace)).toEqual({});
   });

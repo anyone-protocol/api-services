@@ -17,7 +17,6 @@ Bun monorepo for Anyone Protocol API services. Each service under `apps/` builds
 ├── package.json        Bun workspaces (apps/*, packages/*), root scripts, pinned Bun release
 ├── bun.lock            one lockfile for the whole tree
 ├── tsconfig.json       one TypeScript configuration for the whole tree
-├── tests/              checks on the repository itself
 ├── scripts/            repository tooling used by continuous integration
 ├── .github/            workflows
 ├── apps/
@@ -67,7 +66,7 @@ bun test apps/geo-ip-service
 bun run typecheck
 ```
 
-Test files sit next to the code they cover and are named `*.test.ts`. The tests under [tests/](tests/) check the repository's own conventions: every service is named after its directory, and every Dockerfile uses the pinned Bun release and installs and starts its own service.
+Test files sit next to the code they cover and are named `*.test.ts`.
 
 ## Container images
 
@@ -82,7 +81,7 @@ The image holds the production dependencies of that one service, the service's s
 
 ## Bun release
 
-One Bun release is used everywhere. It is named in the `packageManager` field of [package.json](package.json) and in the `FROM` lines of every Dockerfile. To move to another release, change all of them in one commit, run `bun install` with the new release and commit the lockfile. `bun test` fails while they disagree.
+One Bun release is used everywhere. It is named in the `packageManager` field of [package.json](package.json) and in the `FROM` lines of every Dockerfile. To move to another release, change all of them in one commit, run `bun install` with the new release and commit the lockfile.
 
 ## Continuous integration
 
