@@ -1,13 +1,13 @@
-import express, { type Express } from 'express';
 import { createHealthReporter } from '@anyone-protocol/service-kit';
 
-export function createApp(): Express {
-  const app = express();
+export function startServer(port: number) {
   const health = createHealthReporter('api-service');
 
-  app.get('/healthz', (_req, res) => {
-    res.json(health());
+  return Bun.serve({
+    port,
+    routes: {
+      '/healthz': { GET: () => Response.json(health()) },
+    },
+    fetch: () => new Response('Not Found', { status: 404 }),
   });
-
-  return app;
 }

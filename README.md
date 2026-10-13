@@ -30,7 +30,7 @@ Bun monorepo for Anyone Protocol API services. Each service under `apps/` builds
         └── src/index.ts
 ```
 
-Services are TypeScript on the Bun runtime, served with Express. Sources run directly; there is no build step and no `dist/`.
+Services are TypeScript on the Bun runtime, served with `Bun.serve`, the runtime's built-in HTTP server, and no web framework. Sources run directly; there is no build step and no `dist/`.
 
 A service depends on a shared package through the workspace protocol:
 
@@ -124,11 +124,7 @@ The example adds a service named `example-service`.
        "start": "bun src/main.ts"
      },
      "dependencies": {
-       "@anyone-protocol/service-kit": "workspace:*",
-       "express": "^4.22.3"
-     },
-     "devDependencies": {
-       "@types/express": "^4.17.25"
+       "@anyone-protocol/service-kit": "workspace:*"
      }
    }
    ```
@@ -136,23 +132,22 @@ The example adds a service named `example-service`.
 2. Create the entrypoint `apps/example-service/src/main.ts`. It listens on `PORT` and serves `GET /healthz` from `service-kit`.
 
    ```ts
-   import express from 'express';
    import { createHealthReporter } from '@anyone-protocol/service-kit';
 
-   const port = Number(process.env.PORT ?? 3000);
    const health = createHealthReporter('example-service');
-   const app = express();
 
-   app.get('/healthz', (_req, res) => {
-     res.json(health());
+   const server = Bun.serve({
+     port: Number(process.env.PORT ?? 3000),
+     routes: {
+       '/healthz': { GET: () => Response.json(health()) },
+     },
+     fetch: () => new Response('Not Found', { status: 404 }),
    });
 
-   app.listen(port, () => {
-     console.log(`example-service listening on :${port}`);
-   });
+   console.log(`example-service listening on :${server.port}`);
    ```
 
-   The existing services keep the Express app in `src/app.ts`, apart from `main.ts`, so tests can start it on a free port. See [apps/geo-ip-service/src/app.test.ts](apps/geo-ip-service/src/app.test.ts).
+   The existing services keep the server in `src/app.ts`, apart from `main.ts`, so tests can start it on a free port. See [apps/geo-ip-service/src/app.test.ts](apps/geo-ip-service/src/app.test.ts).
 
 3. Copy a Dockerfile from another service and replace that service's name with the new one. It appears three times: the `--filter` argument, the `COPY apps/...` line and the `CMD`.
 

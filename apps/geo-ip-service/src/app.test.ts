@@ -1,27 +1,29 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { once } from 'node:events';
-import type { Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { createApp } from './app';
+import { startServer } from './app';
 
-let server: Server;
-let url: string;
+let server: ReturnType<typeof startServer>;
 
-beforeAll(async () => {
-  server = createApp().listen(0);
-  await once(server, 'listening');
-  url = `http://localhost:${(server.address() as AddressInfo).port}`;
+beforeAll(() => {
+  server = startServer(0);
 });
 
-afterAll(() => {
-  server.close();
+afterAll(async () => {
+  await server.stop();
 });
 
 describe('GET /healthz', () => {
   it('reports the service as ok', async () => {
-    const response = await fetch(`${url}/healthz`);
+    const response = await fetch(new URL('/healthz', server.url));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ service: 'geo-ip-service', status: 'ok' });
+  });
+});
+
+describe('an unknown path', () => {
+  it('is not found', async () => {
+    const response = await fetch(new URL('/missing', server.url));
+
+    expect(response.status).toBe(404);
   });
 });

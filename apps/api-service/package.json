@@ -7,10 +7,6 @@
     "start": "bun src/main.ts"
   },
   "dependencies": {
-    "@anyone-protocol/service-kit": "workspace:*",
-    "express": "^4.22.3"
-  },
-  "devDependencies": {
-    "@types/express": "^4.17.25"
+    "@anyone-protocol/service-kit": "workspace:*"
   }
 }
