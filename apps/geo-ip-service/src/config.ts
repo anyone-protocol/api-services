@@ -5,7 +5,6 @@ const HOUR_MS = 60 * 60 * 1000;
 
 export const maxMindEnv = {
   GEOIP_DATA_DIR: env.string(),
-  MAXMIND_ACCOUNT_ID: env.string({ optional: true }),
   MAXMIND_LICENSE_KEY: env.secret(env.string({ optional: true })),
   MAXMIND_DOWNLOAD_URL: env.url({ default: MAXMIND_DOWNLOAD_URL }),
 };

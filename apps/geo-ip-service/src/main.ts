@@ -3,7 +3,7 @@ import { commonEnv, createLogger, env, handleShutdownSignals, handleUncaughtErro
 import { startServer } from './app';
 import { maxMindEnv, updateScheduleEnv } from './config';
 import { type DatabaseState, GeoDatabases } from './databases';
-import { MaxMindDownloads, maxMindCredentials } from './maxmind-downloads';
+import { MaxMindDownloads } from './maxmind-downloads';
 import { DatabaseUpdater } from './updater';
 
 const config = parseEnv({
@@ -15,12 +15,11 @@ const config = parseEnv({
 const logger = createLogger({ service: 'geo-ip-service', level: config.LOG_LEVEL });
 handleUncaughtErrors(logger);
 
-const credentials = maxMindCredentials(config.MAXMIND_ACCOUNT_ID, config.MAXMIND_LICENSE_KEY);
 const databases = new GeoDatabases();
 const updater = new DatabaseUpdater({
   directory: config.GEOIP_DATA_DIR,
   databases,
-  downloads: credentials && new MaxMindDownloads({ baseUrl: config.MAXMIND_DOWNLOAD_URL, credentials }),
+  downloads: config.MAXMIND_LICENSE_KEY && new MaxMindDownloads({ baseUrl: config.MAXMIND_DOWNLOAD_URL, licenseKey: config.MAXMIND_LICENSE_KEY }),
   maxAgeMs: config.GEOIP_MAX_AGE,
   minRequestIntervalMs: config.MAXMIND_MIN_REQUEST_INTERVAL,
   logger,
@@ -48,7 +47,7 @@ if (updater.enabled) {
     minRequestIntervalMs: config.MAXMIND_MIN_REQUEST_INTERVAL,
   });
 } else {
-  logger.info('Database updates disabled without MaxMind credentials');
+  logger.info('Database updates disabled without a MaxMind license key');
 }
 updater.start(config.GEOIP_CHECK_INTERVAL);
 

@@ -2,7 +2,7 @@ import { createLogger, handleUncaughtErrors, LOG_LEVELS, env, parseEnv } from '@
 import { parseArgs } from 'node:util';
 import { maxMindEnv } from './config';
 import { EDITIONS, type Edition, GeoDatabases } from './databases';
-import { MaxMindDownloads, maxMindCredentials } from './maxmind-downloads';
+import { MaxMindDownloads } from './maxmind-downloads';
 import { DatabaseUpdater } from './updater';
 
 const USAGE = `Downloads the GeoLite2 databases from MaxMind once, checks them and installs them.
@@ -12,7 +12,7 @@ Usage: bun apps/geo-ip-service/src/update.ts [--dir <directory>] [--edition <edi
   --dir      directory to install into, default GEOIP_DATA_DIR
   --edition  edition to download, ${EDITIONS.join(' or ')}; repeat for both, default both
 
-Reads MAXMIND_ACCOUNT_ID, MAXMIND_LICENSE_KEY and MAXMIND_DOWNLOAD_URL like the service. Ignores the
+Reads MAXMIND_LICENSE_KEY and MAXMIND_DOWNLOAD_URL like the service. Ignores the
 update schedule and always downloads. A running service picks the new files up on SIGHUP.`;
 
 const { values } = parseArgs({
@@ -38,9 +38,9 @@ handleUncaughtErrors(logger);
 const directory = values.dir ?? config.GEOIP_DATA_DIR;
 const editions = (values.edition ?? EDITIONS) as Edition[];
 const unknown = editions.filter((edition) => !EDITIONS.includes(edition));
-const credentials = maxMindCredentials(config.MAXMIND_ACCOUNT_ID, config.MAXMIND_LICENSE_KEY);
-if (!directory || unknown.length > 0 || !credentials) {
-  console.error(!directory ? 'Set --dir or GEOIP_DATA_DIR.' : unknown.length > 0 ? `Unknown edition: ${unknown.join(', ')}.` : 'Set MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY.');
+const licenseKey = config.MAXMIND_LICENSE_KEY;
+if (!directory || unknown.length > 0 || !licenseKey) {
+  console.error(!directory ? 'Set --dir or GEOIP_DATA_DIR.' : unknown.length > 0 ? `Unknown edition: ${unknown.join(', ')}.` : 'Set MAXMIND_LICENSE_KEY.');
   console.error(`\n${USAGE}`);
   process.exit(2);
 }
@@ -50,7 +50,7 @@ await databases.loadAll(directory);
 const updater = new DatabaseUpdater({
   directory,
   databases,
-  downloads: new MaxMindDownloads({ baseUrl: config.MAXMIND_DOWNLOAD_URL, credentials }),
+  downloads: new MaxMindDownloads({ baseUrl: config.MAXMIND_DOWNLOAD_URL, licenseKey }),
   maxAgeMs: 0,
   minRequestIntervalMs: 0,
   logger,

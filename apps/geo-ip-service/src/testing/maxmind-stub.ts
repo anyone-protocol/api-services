@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import { ASN, CITY, type Edition } from '../databases';
 
-export const STUB_ACCOUNT_ID = '000000';
 export const STUB_LICENSE_KEY = 'stub-license-key';
+export const STUB_DOWNLOAD_PATH = '/app/geoip_download';
 
 export const TEST_DATABASE_FILES: Record<Edition, string> = {
   [CITY]: join(import.meta.dir, '..', '..', 'test-data', 'GeoLite2-City-Test.mmdb'),
@@ -48,40 +48,58 @@ export function editionArchive(edition: Edition, database: Uint8Array, release =
 }
 
 export interface StubRequest {
+  method: string;
   path: string;
+  edition: string | null;
   suffix: string | null;
-  authorization: string | null;
+  licenseKey: string | null;
 }
 
 export type StubOverride = (request: Request, url: URL) => Response | undefined;
 
+interface Release {
+  archive: Uint8Array;
+  lastModified: string;
+}
+
 export async function startMaxMindStub({ port = 0 }: { port?: number } = {}) {
-  const archives = new Map<Edition, Uint8Array>();
+  const releases = new Map<Edition, Release>();
+  let published = 0;
+  const publish = (edition: Edition, archive: Uint8Array) => {
+    releases.set(edition, { archive, lastModified: new Date(Date.UTC(2026, 9, 14) + 1000 * published++).toUTCString() });
+  };
   for (const edition of [CITY, ASN] as const) {
-    archives.set(edition, editionArchive(edition, await Bun.file(TEST_DATABASE_FILES[edition]).bytes()));
+    publish(edition, editionArchive(edition, await Bun.file(TEST_DATABASE_FILES[edition]).bytes()));
   }
-  const expectedAuthorization = `Basic ${btoa(`${STUB_ACCOUNT_ID}:${STUB_LICENSE_KEY}`)}`;
   const requests: StubRequest[] = [];
   const control: { override: StubOverride | undefined } = { override: undefined };
 
-  const answer = (request: Request, url: URL): Response => {
-    const download = /^\/(GeoLite2-City|GeoLite2-ASN)\/download$/.exec(url.pathname);
+  const answer = (url: URL): Response => {
     const file = /^\/files\/(GeoLite2-City|GeoLite2-ASN)\.tar\.gz$/.exec(url.pathname);
-    const edition = (download?.[1] ?? file?.[1]) as Edition | undefined;
-    const archive = edition ? archives.get(edition) : undefined;
-    if (!archive) return new Response('Not Found', { status: 404 });
-
-    if (file) return new Response(archive);
-    if (request.headers.get('authorization') !== expectedAuthorization) {
-      return new Response('Invalid account ID or license key', { status: 401 });
+    if (file) {
+      const release = releases.get(file[1] as Edition);
+      return release ? new Response(release.archive) : new Response('Not Found', { status: 404 });
     }
+
+    const edition = url.searchParams.get('edition_id') as Edition;
+    const release = releases.get(edition);
+    if (url.pathname !== STUB_DOWNLOAD_PATH || !release) return new Response('Not Found', { status: 404 });
+    if (url.searchParams.get('license_key') !== STUB_LICENSE_KEY) return new Response('Invalid license key', { status: 401 });
+
     const suffix = url.searchParams.get('suffix');
     if (suffix === 'tar.gz.sha256') {
-      const checksum = new Bun.CryptoHasher('sha256').update(archive).digest('hex');
+      const checksum = new Bun.CryptoHasher('sha256').update(release.archive).digest('hex');
       return new Response(`${checksum}  ${edition}_20261014.tar.gz\n`);
     }
     if (suffix === 'tar.gz') {
-      return new Response(null, { status: 302, headers: { location: `/files/${edition}.tar.gz` } });
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: `/files/${edition}.tar.gz`,
+          'last-modified': release.lastModified,
+          'content-disposition': `attachment; filename=${edition}_20261014.tar.gz`,
+        },
+      });
     }
     return new Response('Invalid suffix', { status: 400 });
   };
@@ -90,18 +108,22 @@ export async function startMaxMindStub({ port = 0 }: { port?: number } = {}) {
     port,
     fetch(request) {
       const url = new URL(request.url);
-      requests.push({ path: url.pathname, suffix: url.searchParams.get('suffix'), authorization: request.headers.get('authorization') });
-      return control.override?.(request, url) ?? answer(request, url);
+      requests.push({
+        method: request.method,
+        path: url.pathname,
+        edition: url.searchParams.get('edition_id'),
+        suffix: url.searchParams.get('suffix'),
+        licenseKey: url.searchParams.get('license_key'),
+      });
+      return control.override?.(request, url) ?? answer(url);
     },
   });
 
   return {
     server,
     requests,
-    url: server.url.href,
-    publish(edition: Edition, archive: Uint8Array) {
-      archives.set(edition, archive);
-    },
+    downloadUrl: new URL(STUB_DOWNLOAD_PATH, server.url).href,
+    publish,
     override(handler: StubOverride | undefined) {
       control.override = handler;
     },
@@ -112,6 +134,6 @@ export type MaxMindStub = Awaited<ReturnType<typeof startMaxMindStub>>;
 
 if (import.meta.main) {
   const stub = await startMaxMindStub({ port: Number(process.env.PORT ?? 4000) });
-  console.log(`MaxMind stub serving the test databases at ${stub.url}`);
-  console.log(`MAXMIND_DOWNLOAD_URL=${stub.url} MAXMIND_ACCOUNT_ID=${STUB_ACCOUNT_ID} MAXMIND_LICENSE_KEY=${STUB_LICENSE_KEY}`);
+  console.log(`MaxMind stub serving the test databases at ${stub.downloadUrl}`);
+  console.log(`MAXMIND_DOWNLOAD_URL=${stub.downloadUrl} MAXMIND_LICENSE_KEY=${STUB_LICENSE_KEY}`);
 }
