@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ASN, CITY, databasePath, type Edition, GeoDatabases } from './databases';
 import { MaxMindDownloads } from './maxmind-downloads';
-import { editionArchive, makeArchive, type MaxMindStub, STUB_ACCOUNT_ID, STUB_LICENSE_KEY, startMaxMindStub, TEST_DATABASE_FILES } from './testing/maxmind-stub';
+import { editionArchive, makeArchive, type MaxMindStub, STUB_LICENSE_KEY, startMaxMindStub, TEST_DATABASE_FILES } from './testing/maxmind-stub';
 import { DatabaseUpdater, UPDATE_RECORDS_FILE } from './updater';
 
 const HOUR = 60 * 60 * 1000;
@@ -16,18 +16,15 @@ let directory: string;
 let clock: number;
 let logLines: Record<string, unknown>[];
 
-function updater({ databases = new GeoDatabases(() => clock), credentials = true } = {}) {
+function updater({ databases = new GeoDatabases(() => clock), licensed = true } = {}) {
   const logger = createLogger({ service: 'geo-ip-service', write: (line) => logLines.push(JSON.parse(line)) });
-  const downloads = new MaxMindDownloads({
-    baseUrl: stub.url,
-    credentials: { accountId: STUB_ACCOUNT_ID, licenseKey: new Secret(STUB_LICENSE_KEY) },
-  });
+  const downloads = new MaxMindDownloads({ baseUrl: stub.downloadUrl, licenseKey: new Secret(STUB_LICENSE_KEY) });
   return {
     databases,
     updater: new DatabaseUpdater({
       directory,
       databases,
-      downloads: credentials ? downloads : undefined,
+      downloads: licensed ? downloads : undefined,
       maxAgeMs: 72 * HOUR,
       minRequestIntervalMs: 12 * HOUR,
       logger,
@@ -43,7 +40,7 @@ async function restart() {
 }
 
 function requestsSince(count: number) {
-  return stub.requests.slice(count).map(({ path, suffix }) => (suffix ? `${path}?suffix=${suffix}` : path));
+  return stub.requests.slice(count).map(({ method, path, edition, suffix }) => (edition ? `${method} ${edition} ${suffix}` : `${method} ${path}`));
 }
 
 async function testDatabase(edition: Edition) {
@@ -69,27 +66,31 @@ describe('on an empty volume', () => {
     await geo.checkAll();
 
     expect(requestsSince(0)).toEqual([
-      '/GeoLite2-City/download?suffix=tar.gz.sha256',
-      '/GeoLite2-City/download?suffix=tar.gz',
-      '/files/GeoLite2-City.tar.gz',
-      '/GeoLite2-ASN/download?suffix=tar.gz.sha256',
-      '/GeoLite2-ASN/download?suffix=tar.gz',
-      '/files/GeoLite2-ASN.tar.gz',
+      'HEAD GeoLite2-City tar.gz',
+      'GET GeoLite2-City tar.gz.sha256',
+      'GET GeoLite2-City tar.gz',
+      'GET /files/GeoLite2-City.tar.gz',
+      'HEAD GeoLite2-ASN tar.gz',
+      'GET GeoLite2-ASN tar.gz.sha256',
+      'GET GeoLite2-ASN tar.gz',
+      'GET /files/GeoLite2-ASN.tar.gz',
     ]);
     expect(await readFile(databasePath(directory, CITY))).toEqual(Buffer.from(await testDatabase(CITY)));
     expect(databases.lookup('89.160.20.112')).toMatchObject({ status: 'found', location: { cityName: 'Linköping', asName: 'Bredband2 AB' } });
     expect(geo.status(CITY)).toMatchObject({ enabled: true, lastOutcome: 'downloaded', lastError: null });
   });
 
-  it('sends the credentials to MaxMind and not to the host it redirects to', async () => {
+  it('gives the license key to MaxMind and not to the host it redirects to', async () => {
     await updater().updater.checkAll();
 
-    const authorized = stub.requests.filter((request) => request.authorization !== null).map((request) => request.path);
-    expect(authorized).toEqual(['/GeoLite2-City/download', '/GeoLite2-City/download', '/GeoLite2-ASN/download', '/GeoLite2-ASN/download']);
+    const files = stub.requests.filter((request) => request.path.startsWith('/files/'));
+    expect(files).toHaveLength(2);
+    expect(files.every((request) => request.licenseKey === null)).toBe(true);
+    expect(stub.requests.filter((request) => !request.path.startsWith('/files/')).every((request) => request.licenseKey === STUB_LICENSE_KEY)).toBe(true);
   });
 
-  it('never contacts MaxMind without credentials', async () => {
-    const { updater: geo } = updater({ credentials: false });
+  it('never contacts MaxMind without a license key', async () => {
+    const { updater: geo } = updater({ licensed: false });
 
     await geo.checkAll();
 
@@ -114,15 +115,27 @@ describe('with databases on the volume', () => {
     expect(requestsSince(before)).toEqual([]);
   });
 
-  it('asks only for the checksum once a database is older than the maximum age and MaxMind has nothing newer', async () => {
+  it('asks only with HEAD once a database is older than the maximum age and MaxMind has the same release', async () => {
     const before = stub.requests.length;
     const { updater: geo } = await restart();
     clock = BUILD + 72 * HOUR;
 
     await geo.checkAll();
 
-    expect(requestsSince(before)).toEqual(['/GeoLite2-City/download?suffix=tar.gz.sha256', '/GeoLite2-ASN/download?suffix=tar.gz.sha256']);
+    expect(requestsSince(before)).toEqual(['HEAD GeoLite2-City tar.gz', 'HEAD GeoLite2-ASN tar.gz']);
     expect(geo.status(CITY)).toMatchObject({ lastOutcome: 'unchanged', nextCheckAfter: new Date(clock + 12 * HOUR).toISOString() });
+  });
+
+  it('compares the checksum instead when HEAD gives no release date', async () => {
+    const before = stub.requests.length;
+    stub.override((request) => (request.method === 'HEAD' ? new Response(null, { status: 302, headers: { location: '/files/elsewhere' } }) : undefined));
+    const { updater: geo } = await restart();
+    clock = BUILD + 72 * HOUR;
+
+    await geo.checkAll();
+
+    expect(requestsSince(before)).toEqual(['HEAD GeoLite2-City tar.gz', 'GET GeoLite2-City tar.gz.sha256', 'HEAD GeoLite2-ASN tar.gz', 'GET GeoLite2-ASN tar.gz.sha256']);
+    expect(geo.status(CITY).lastOutcome).toBe('unchanged');
   });
 
   it('waits the minimum request interval before asking MaxMind again, across restarts', async () => {
@@ -168,15 +181,15 @@ describe('with databases on the volume', () => {
 
     await geo.update(CITY, { force: true });
 
-    expect(requestsSince(before)).toEqual(['/GeoLite2-City/download?suffix=tar.gz.sha256', '/GeoLite2-City/download?suffix=tar.gz', '/files/GeoLite2-City.tar.gz']);
+    expect(requestsSince(before)).toEqual(['HEAD GeoLite2-City tar.gz', 'GET GeoLite2-City tar.gz.sha256', 'GET GeoLite2-City tar.gz', 'GET /files/GeoLite2-City.tar.gz']);
   });
 
   describe('when an update fails', () => {
     const failures: [string, (stub: MaxMindStub) => Promise<void> | void, string][] = [
-      ['MaxMind refuses the credentials', (s) => s.override(() => new Response('Invalid account ID or license key', { status: 401 })), 'MaxMind answered 401'],
+      ['MaxMind refuses the license key', (s) => s.override(() => new Response('Invalid license key', { status: 401 })), 'MaxMind answered 401 to HEAD for GeoLite2-City tar.gz'],
       ['MaxMind limits the rate', (s) => s.override(() => new Response('Too many requests', { status: 429 })), 'MaxMind answered 429'],
       ['MaxMind fails', (s) => s.override(() => new Response('', { status: 500 })), 'MaxMind answered 500'],
-      ['MaxMind is unreachable', (s) => s.server.stop(true), 'MaxMind request for GeoLite2-City tar.gz.sha256 failed'],
+      ['MaxMind is unreachable', (s) => s.server.stop(true), 'MaxMind HEAD for GeoLite2-City tar.gz failed'],
       [
         'the archive does not match its checksum',
         async (s) => {
@@ -203,6 +216,7 @@ describe('with databases on the volume', () => {
       expect(await readFile(databasePath(directory, CITY))).toEqual(installed);
       expect(geo.renderMetrics()).toContain('geoip_update_requests_total{edition="GeoLite2-City",outcome="failed"} 1');
       expect(logLines).toContainEqual(expect.objectContaining({ level: 'warn', message: 'Database update failed', edition: CITY }));
+      expect(JSON.stringify(logLines)).not.toContain(STUB_LICENSE_KEY);
     });
 
     it('refuses a release older than the loaded database', async () => {
@@ -219,10 +233,10 @@ describe('with databases on the volume', () => {
     });
 
     it('keeps the license key out of the logs even when MaxMind repeats it', async () => {
-      stub.override(() => new Response(`Invalid license key ${STUB_LICENSE_KEY}`, { status: 401 }));
+      stub.override((request) => (request.method === 'GET' ? new Response(`Invalid license key ${STUB_LICENSE_KEY}`, { status: 401 }) : undefined));
       const { updater: geo } = await restart();
 
-      await geo.update(CITY);
+      await geo.update(CITY, { force: true });
 
       expect(JSON.stringify(logLines)).not.toContain(STUB_LICENSE_KEY);
       expect(JSON.stringify(logLines)).toContain('Invalid license key [redacted]');

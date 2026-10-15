@@ -14,6 +14,7 @@ export interface UpdateRecord {
   lastAttemptAt: string | null;
   lastOutcome: UpdateOutcome | null;
   lastError: string | null;
+  release: string | null;
   archiveSha256: string | null;
 }
 
@@ -34,7 +35,7 @@ export interface DatabaseUpdaterOptions {
   now?: () => number;
 }
 
-const NO_ATTEMPT: UpdateRecord = { lastAttemptAt: null, lastOutcome: null, lastError: null, archiveSha256: null };
+const NO_ATTEMPT: UpdateRecord = { lastAttemptAt: null, lastOutcome: null, lastError: null, release: null, archiveSha256: null };
 
 function sha256(bytes: Uint8Array): string {
   return new Bun.CryptoHasher('sha256').update(bytes).digest('hex');
@@ -77,23 +78,29 @@ export class DatabaseUpdater {
   async update(edition: Edition, { force = false } = {}): Promise<UpdateRecord> {
     const { downloads, databases, logger } = this.#options;
     if (!downloads) {
-      throw new Error('Database updates are disabled without MaxMind credentials');
+      throw new Error('Database updates are disabled without a MaxMind license key');
     }
 
     const previous = (await this.#readRecords())[edition] ?? NO_ATTEMPT;
     const lastAttemptAt = new Date(this.#now()).toISOString();
     let record: UpdateRecord;
     try {
-      const checksum = await downloads.checksum(edition);
-      if (!force && databases.state(edition).loaded && checksum === previous.archiveSha256) {
-        record = { lastAttemptAt, lastOutcome: 'unchanged', lastError: null, archiveSha256: checksum };
+      const installed = !force && databases.state(edition).loaded;
+      const release = await downloads.release(edition);
+      if (installed && release !== null && release === previous.release) {
+        record = { lastAttemptAt, lastOutcome: 'unchanged', lastError: null, release, archiveSha256: previous.archiveSha256 };
       } else {
-        await this.#install(edition, await downloads.archive(edition), checksum);
-        record = { lastAttemptAt, lastOutcome: 'downloaded', lastError: null, archiveSha256: checksum };
+        const checksum = await downloads.checksum(edition);
+        if (installed && checksum === previous.archiveSha256) {
+          record = { lastAttemptAt, lastOutcome: 'unchanged', lastError: null, release, archiveSha256: checksum };
+        } else {
+          await this.#install(edition, await downloads.archive(edition), checksum);
+          record = { lastAttemptAt, lastOutcome: 'downloaded', lastError: null, release, archiveSha256: checksum };
+        }
       }
     } catch (error) {
       const lastError = error instanceof Error ? error.message : String(error);
-      record = { lastAttemptAt, lastOutcome: 'failed', lastError, archiveSha256: previous.archiveSha256 };
+      record = { ...previous, lastAttemptAt, lastOutcome: 'failed', lastError };
     }
 
     await this.#writeRecords({ ...(await this.#readRecords()), [edition]: record });

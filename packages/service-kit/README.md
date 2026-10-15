@@ -72,7 +72,7 @@ Once revealed, a library can still repeat the value, for example in an error mes
 Rules for code in this repository:
 
 - Never log the environment, `process.env` or a configuration object built outside `parseEnv`.
-- Send credentials in headers or request bodies, never in a URL path or query string, where they end up in error messages and access logs.
+- Send credentials in headers or request bodies, not in a URL path or query string, where they end up in error messages and access logs. When a provider accepts a credential only in the URL, keep that URL out of every error message and log line.
 - Keep secret material out of health check details. `/healthz` can be public.
 
 ## Logging
