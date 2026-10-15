@@ -21,11 +21,16 @@
         "@anyone-protocol/service-kit": "workspace:*",
       },
     },
+    "packages/geo-ip-client": {
+      "name": "@anyone-protocol/geo-ip-client",
+    },
     "packages/service-kit": {
       "name": "@anyone-protocol/service-kit",
     },
   },
   "packages": {
+    "@anyone-protocol/geo-ip-client": ["@anyone-protocol/geo-ip-client@workspace:packages/geo-ip-client"],
+
     "@anyone-protocol/service-kit": ["@anyone-protocol/service-kit@workspace:packages/service-kit"],
 
     "@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],

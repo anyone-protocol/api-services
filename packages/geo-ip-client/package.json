@@ -1,0 +1,6 @@
+{
+  "name": "@anyone-protocol/geo-ip-client",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts"
+}

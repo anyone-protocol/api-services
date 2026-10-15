@@ -1,5 +1,10 @@
+import { commonEnv, createLogger, handleShutdownSignals, parseEnv } from '@anyone-protocol/service-kit';
 import { startServer } from './app';
 
-const server = startServer(Number(process.env.PORT ?? 3000));
+const config = parseEnv(commonEnv);
+const logger = createLogger({ service: 'api-service', level: config.LOG_LEVEL });
+const server = startServer(config.PORT);
 
-console.log(`api-service listening on :${server.port}`);
+logger.info('Listening', { port: server.port });
+
+handleShutdownSignals([['http server', () => server.stop()]], { logger });

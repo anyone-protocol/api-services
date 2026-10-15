@@ -1,4 +1,4 @@
-import { createHealthReporter } from '@anyone-protocol/service-kit';
+import { createHealthReporter, healthResponse } from '@anyone-protocol/service-kit';
 
 export function startServer(port: number) {
   const health = createHealthReporter('api-service');
@@ -6,7 +6,7 @@ export function startServer(port: number) {
   return Bun.serve({
     port,
     routes: {
-      '/healthz': { GET: () => Response.json(health()) },
+      '/healthz': { GET: () => healthResponse(health()) },
     },
     fetch: () => new Response('Not Found', { status: 404 }),
   });
