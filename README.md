@@ -19,6 +19,7 @@ Bun monorepo for Anyone Protocol API services. Each service under `apps/` builds
 ├── bun.lock            one lockfile for the whole tree
 ├── tsconfig.json       one TypeScript configuration for the whole tree
 ├── scripts/            repository tooling used by continuous integration
+├── operations/         Nomad job definitions, see operations/README.md
 ├── .github/            workflows
 ├── apps/
 │   └── <service>/
@@ -107,7 +108,7 @@ A service that a push did not affect has no image tagged with that commit. Its n
 
 To publish services at a commit regardless of what changed, run the workflow by hand on the default branch (Actions, CI, Run workflow). `services` takes `all` or a space separated list.
 
-Nothing is deployed by continuous integration.
+Nothing is deployed by continuous integration. Deployments are manual, with the job definitions in [operations](operations/).
 
 ## Adding a service
 

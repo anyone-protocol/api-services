@@ -1,6 +1,6 @@
 import { createLogger, Secret } from '@anyone-protocol/service-kit';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ASN, CITY, databasePath, type Edition, GeoDatabases } from './databases';
@@ -241,6 +241,20 @@ describe('with databases on the volume', () => {
       expect(JSON.stringify(logLines)).not.toContain(STUB_LICENSE_KEY);
       expect(JSON.stringify(logLines)).toContain('Invalid license key [redacted]');
     });
+  });
+});
+
+describe('two allocations sharing a volume', () => {
+  it('install the same release side by side without leaving a broken or temporary file', async () => {
+    const first = updater();
+    const second = updater();
+
+    const records = await Promise.all([first.updater.update(CITY, { force: true }), second.updater.update(CITY, { force: true })]);
+
+    expect(records.map((record) => record.lastOutcome)).toEqual(['downloaded', 'downloaded']);
+
+    expect(await readFile(databasePath(directory, CITY))).toEqual(Buffer.from(await testDatabase(CITY)));
+    expect((await readdir(directory)).sort()).toEqual(['GeoLite2-City.mmdb', UPDATE_RECORDS_FILE]);
   });
 });
 
