@@ -9,7 +9,8 @@ Bun monorepo for Anyone Protocol API services. Each service under `apps/` builds
 
 | Package | Purpose |
 | ------- | ------- |
-| [packages/service-kit](packages/service-kit/) | Runtime pieces every service uses, free of any web framework |
+| [packages/service-kit](packages/service-kit/) | Environment parsing, secret redaction, logging, health endpoint and graceful shutdown for every service |
+| [packages/geo-ip-client](packages/geo-ip-client/) | Batching, caching client for geo-ip-service |
 
 ## Layout
 
@@ -51,7 +52,7 @@ bun install
 bun run --filter geo-ip-service dev
 ```
 
-`dev` restarts the service when a source file changes. Every service listens on `PORT`, default 3000, and answers `GET /healthz`. To run two services side by side, give each its own port:
+`dev` restarts the service when a source file changes. Every service listens on `PORT`, default 3000, writes JSON log lines at `LOG_LEVEL`, default `info`, answers `GET /healthz`, and shuts down cleanly on `SIGTERM` or `SIGINT`. See [packages/service-kit](packages/service-kit/) for each of these. To run two services side by side, give each its own port:
 
 ```sh
 PORT=3001 bun run --filter api-service dev
@@ -129,22 +130,26 @@ The example adds a service named `example-service`.
    }
    ```
 
-2. Create the entrypoint `apps/example-service/src/main.ts`. It listens on `PORT` and serves `GET /healthz` from `service-kit`.
+2. Create the entrypoint `apps/example-service/src/main.ts`. It reads its environment, logs, serves `GET /healthz`, logs crashes and shuts down on a signal, all through `service-kit`. Declare any credential the service reads with `env.secret`, see [packages/service-kit](packages/service-kit/#secrets).
 
    ```ts
-   import { createHealthReporter } from '@anyone-protocol/service-kit';
+   import { commonEnv, createHealthReporter, createLogger, handleShutdownSignals, handleUncaughtErrors, healthResponse, parseEnv } from '@anyone-protocol/service-kit';
 
+   const config = parseEnv(commonEnv);
+   const logger = createLogger({ service: 'example-service', level: config.LOG_LEVEL });
+   handleUncaughtErrors(logger);
    const health = createHealthReporter('example-service');
 
    const server = Bun.serve({
-     port: Number(process.env.PORT ?? 3000),
+     port: config.PORT,
      routes: {
-       '/healthz': { GET: () => Response.json(health()) },
+       '/healthz': { GET: () => healthResponse(health()) },
      },
      fetch: () => new Response('Not Found', { status: 404 }),
    });
 
-   console.log(`example-service listening on :${server.port}`);
+   logger.info('Listening', { port: server.port });
+   handleShutdownSignals([['http server', () => server.stop()]], { logger });
    ```
 
    The existing services keep the server in `src/app.ts`, apart from `main.ts`, so tests can start it on a free port. See [apps/geo-ip-service/src/app.test.ts](apps/geo-ip-service/src/app.test.ts).

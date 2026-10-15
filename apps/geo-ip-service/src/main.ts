@@ -1,5 +1,12 @@
+import { commonEnv, createLogger, handleShutdownSignals, handleUncaughtErrors, parseEnv } from '@anyone-protocol/service-kit';
 import { startServer } from './app';
 
-const server = startServer(Number(process.env.PORT ?? 3000));
+const config = parseEnv(commonEnv);
+const logger = createLogger({ service: 'geo-ip-service', level: config.LOG_LEVEL });
+handleUncaughtErrors(logger);
 
-console.log(`geo-ip-service listening on :${server.port}`);
+const server = startServer(config.PORT);
+
+logger.info('Listening', { port: server.port });
+
+handleShutdownSignals([['http server', () => server.stop()]], { logger });
