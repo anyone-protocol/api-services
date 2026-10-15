@@ -41,6 +41,17 @@ export async function runShutdown(tasks: readonly ShutdownTask[], { logger, time
   }
 }
 
+export function handleUncaughtErrors(logger: Logger): void {
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught exception', { error });
+    process.exit(1);
+  });
+  process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled promise rejection', { error: reason });
+    process.exit(1);
+  });
+}
+
 export function handleShutdownSignals(tasks: readonly ShutdownTask[], options: ShutdownOptions): void {
   let stopping = false;
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { commonEnv, env, parseEnv } from './env';
+import { Secret } from './secret';
 
 describe('parseEnv', () => {
   it('parses each variable with its parser', () => {
@@ -35,6 +36,27 @@ describe('parseEnv', () => {
 
     expect(parse).toThrow(
       'Invalid environment: REQUIRED is required; PORT must be an integer; UPSTREAM_URL must be an absolute URL; MODE must be one of fast, safe',
+    );
+  });
+});
+
+describe('env.secret', () => {
+  it('wraps the parsed value so it prints as redacted', () => {
+    const config = parseEnv({ DB_PASS: env.secret(env.string()) }, { DB_PASS: 'env-secret-value' });
+
+    expect(config.DB_PASS).toBeInstanceOf(Secret);
+    expect(config.DB_PASS.reveal()).toBe('env-secret-value');
+    expect(JSON.stringify(config)).toBe('{"DB_PASS":"[redacted]"}');
+  });
+
+  it('leaves an unset optional secret undefined', () => {
+    expect(parseEnv({ TOKEN: env.secret(env.string({ optional: true })) }, {})).toEqual({ TOKEN: undefined });
+  });
+
+  it('reports a missing or invalid secret by name only', () => {
+    expect(() => parseEnv({ DB_PASS: env.secret(env.string()) }, {})).toThrow('Invalid environment: DB_PASS is required');
+    expect(() => parseEnv({ DB_URI: env.secret(env.url()) }, { DB_URI: 'not a url with p4ssword' })).toThrow(
+      'Invalid environment: DB_URI must be an absolute URL',
     );
   });
 });

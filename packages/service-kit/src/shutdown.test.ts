@@ -56,3 +56,29 @@ describe('runShutdown', () => {
     expect(lines).toContainEqual(expect.objectContaining({ message: 'Shutdown timed out', timeoutMs: 20 }));
   });
 });
+
+describe('handleUncaughtErrors', () => {
+  async function crash(failure: string) {
+    const serviceKit = `${import.meta.dir}/index.ts`;
+    const script = `
+      import { createLogger, handleUncaughtErrors, Secret } from ${JSON.stringify(serviceKit)};
+      const key = new Secret('crash-secret-value');
+      handleUncaughtErrors(createLogger({ service: 'example-service' }));
+      ${failure}
+    `;
+    const child = Bun.spawn([process.execPath, '-e', script], { stdout: 'pipe', stderr: 'pipe' });
+    const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    return { lines: stdout.trim().split('\n').map((line) => JSON.parse(line)), stderr, exitCode };
+  }
+
+  it.each([
+    ['an uncaught exception', 'setTimeout(() => { throw new Error("rejected " + key.reveal()); });', 'Uncaught exception'],
+    ['an unhandled rejection', 'Promise.reject(new Error("rejected " + key.reveal()));', 'Unhandled promise rejection'],
+  ])('logs %s through the logger with secrets redacted and exits 1', async (_, failure, message) => {
+    const { lines, stderr, exitCode } = await crash(failure);
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe('');
+    expect(lines).toEqual([expect.objectContaining({ level: 'error', message, error: expect.objectContaining({ message: 'rejected [redacted]' }) })]);
+  });
+});

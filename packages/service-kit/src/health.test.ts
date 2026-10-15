@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { createHealthReporter, healthResponse } from './health';
+import { Secret } from './secret';
 
 describe('createHealthReporter', () => {
   it('reports the service name and whole seconds since creation', () => {
@@ -44,6 +45,18 @@ describe('healthResponse', () => {
   it('answers 200 while the service is ok or degraded', () => {
     expect(healthResponse({ ...report, status: 'ok' }).status).toBe(200);
     expect(healthResponse({ ...report, status: 'degraded' }).status).toBe(200);
+  });
+
+  it('redacts secrets in check details', async () => {
+    const key = new Secret('health-secret-value');
+    const health = createHealthReporter('example-service', {
+      checks: { upstream: () => ({ status: 'degraded', lastError: `refused ${key.reveal()}` }) },
+    });
+
+    const response = healthResponse(health());
+
+    expect(response.headers.get('content-type')).toBe('application/json;charset=utf-8');
+    expect(await response.json()).toMatchObject({ checks: { upstream: { lastError: 'refused [redacted]' } } });
   });
 
   it('answers 503 when the service is down', async () => {

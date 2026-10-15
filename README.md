@@ -9,7 +9,7 @@ Bun monorepo for Anyone Protocol API services. Each service under `apps/` builds
 
 | Package | Purpose |
 | ------- | ------- |
-| [packages/service-kit](packages/service-kit/) | Environment parsing, logging, health endpoint and graceful shutdown for every service |
+| [packages/service-kit](packages/service-kit/) | Environment parsing, secret redaction, logging, health endpoint and graceful shutdown for every service |
 | [packages/geo-ip-client](packages/geo-ip-client/) | Batching, caching client for geo-ip-service |
 
 ## Layout
@@ -130,13 +130,14 @@ The example adds a service named `example-service`.
    }
    ```
 
-2. Create the entrypoint `apps/example-service/src/main.ts`. It reads its environment, logs, serves `GET /healthz` and shuts down on a signal, all through `service-kit`.
+2. Create the entrypoint `apps/example-service/src/main.ts`. It reads its environment, logs, serves `GET /healthz`, logs crashes and shuts down on a signal, all through `service-kit`. Declare any credential the service reads with `env.secret`, see [packages/service-kit](packages/service-kit/#secrets).
 
    ```ts
-   import { commonEnv, createHealthReporter, createLogger, handleShutdownSignals, healthResponse, parseEnv } from '@anyone-protocol/service-kit';
+   import { commonEnv, createHealthReporter, createLogger, handleShutdownSignals, handleUncaughtErrors, healthResponse, parseEnv } from '@anyone-protocol/service-kit';
 
    const config = parseEnv(commonEnv);
    const logger = createLogger({ service: 'example-service', level: config.LOG_LEVEL });
+   handleUncaughtErrors(logger);
    const health = createHealthReporter('example-service');
 
    const server = Bun.serve({

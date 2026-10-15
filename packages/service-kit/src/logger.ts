@@ -1,3 +1,5 @@
+import { redact } from './secret';
+
 export const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 
 export type LogLevel = (typeof LOG_LEVELS)[number];
@@ -27,7 +29,7 @@ function buildLogger(bound: LogFields, threshold: number, write: (line: string) 
   const at = (level: LogLevel) => (message: string, fields: LogFields = {}) => {
     if (LOG_LEVELS.indexOf(level) < threshold) return;
     const entries = Object.entries({ ...bound, ...fields }).map(([key, value]) => [key, serializable(value)]);
-    write(JSON.stringify({ timestamp: new Date(now()).toISOString(), level, message, ...Object.fromEntries(entries) }));
+    write(redact(JSON.stringify({ timestamp: new Date(now()).toISOString(), level, message, ...Object.fromEntries(entries) })));
   };
 
   return {

@@ -1,4 +1,5 @@
 import { LOG_LEVELS } from './logger';
+import { Secret } from './secret';
 
 export type EnvParser<T> = (raw: string | undefined) => T;
 
@@ -56,11 +57,19 @@ function oneOf(values: readonly string[], options?: VariableOptions<string>): En
   }, options);
 }
 
+function secret<T>(parse: EnvParser<T>): EnvParser<Secret<NonNullable<T>> | Extract<T, undefined>> {
+  return (raw) => {
+    const value = parse(raw);
+    return (value === undefined ? undefined : new Secret(value)) as Secret<NonNullable<T>> | Extract<T, undefined>;
+  };
+}
+
 export const env = {
   string: variable((raw) => raw),
   integer: variable(parseInteger),
   url: variable(parseUrl),
   oneOf: oneOf as DefineOneOf,
+  secret,
 };
 
 export const commonEnv = {

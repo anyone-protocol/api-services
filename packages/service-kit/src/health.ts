@@ -1,3 +1,5 @@
+import { redact } from './secret';
+
 export type HealthStatus = 'ok' | 'degraded' | 'down';
 
 export interface CheckResult {
@@ -47,5 +49,8 @@ export function createHealthReporter(service: string, { checks = {}, now = Date.
 }
 
 export function healthResponse(report: HealthReport): Response {
-  return Response.json(report, { status: report.status === 'down' ? 503 : 200 });
+  return new Response(redact(JSON.stringify(report)), {
+    status: report.status === 'down' ? 503 : 200,
+    headers: { 'content-type': 'application/json;charset=utf-8' },
+  });
 }
