@@ -21,12 +21,19 @@ export interface DatabaseState {
 
 interface LoadedDatabase {
   reader: Reader<Response>;
-  buildDate: Date;
   loadedAt: Date;
 }
 
 export function databasePath(directory: string, edition: Edition): string {
   return join(directory, `${edition}.mmdb`);
+}
+
+export function openDatabase(edition: Edition, bytes: Buffer): Reader<Response> {
+  const reader = new Reader<Response>(bytes);
+  if (reader.metadata.databaseType !== edition) {
+    throw new Error(`database holds ${reader.metadata.databaseType}, expected ${edition}`);
+  }
+  return reader;
 }
 
 export class GeoDatabases {
@@ -44,16 +51,28 @@ export class GeoDatabases {
 
   async load(edition: Edition, path: string): Promise<DatabaseState> {
     try {
-      const reader = new Reader<Response>(await readFile(path));
-      if (reader.metadata.databaseType !== edition) {
-        throw new Error(`${path} holds ${reader.metadata.databaseType}, expected ${edition}`);
-      }
-      this.#loaded.set(edition, { reader, buildDate: reader.metadata.buildEpoch, loadedAt: new Date(this.#now()) });
-      this.#errors.delete(edition);
+      this.replace(edition, openDatabase(edition, await readFile(path)));
     } catch (error) {
-      this.#errors.set(edition, error instanceof Error ? error.message : String(error));
+      this.#errors.set(edition, `${path}: ${error instanceof Error ? error.message : String(error)}`);
     }
     return this.state(edition);
+  }
+
+  async loadAll(directory: string): Promise<DatabaseState[]> {
+    const states: DatabaseState[] = [];
+    for (const edition of EDITIONS) {
+      states.push(await this.load(edition, databasePath(directory, edition)));
+    }
+    return states;
+  }
+
+  replace(edition: Edition, reader: Reader<Response>): void {
+    this.#loaded.set(edition, { reader, loadedAt: new Date(this.#now()) });
+    this.#errors.delete(edition);
+  }
+
+  buildDate(edition: Edition): Date | undefined {
+    return this.#loaded.get(edition)?.reader.metadata.buildEpoch;
   }
 
   state(edition: Edition): DatabaseState {
@@ -61,7 +80,7 @@ export class GeoDatabases {
     return {
       edition,
       loaded: database !== undefined,
-      buildDate: database?.buildDate.toISOString() ?? null,
+      buildDate: database?.reader.metadata.buildEpoch.toISOString() ?? null,
       loadedAt: database?.loadedAt.toISOString() ?? null,
       lastError: this.#errors.get(edition) ?? null,
     };

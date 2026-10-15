@@ -3,11 +3,13 @@ import { createHealthReporter, healthResponse, type HealthCheck, type HealthStat
 import { ASN, CITY, EDITIONS, type Edition, type GeoDatabases } from './databases';
 import { isH3Resolution, MAX_H3_RESOLUTION } from './location';
 import { Counter, METRICS_CONTENT_TYPE, metricFamily, Summary } from './metrics';
+import type { DatabaseUpdater } from './updater';
 
 export interface ServerOptions {
   port: number;
   databases: GeoDatabases;
   maxBatchSize: number;
+  updater?: DatabaseUpdater;
 }
 
 interface BatchRequest {
@@ -46,14 +48,15 @@ function parseH3Query(url: string): number | undefined | Response {
   return isH3Resolution(resolution) ? resolution : errorResponse(400, H3_RESOLUTION_ERROR);
 }
 
-function databaseCheck(databases: GeoDatabases, edition: Edition): HealthCheck {
+function databaseCheck(databases: GeoDatabases, edition: Edition, updater: DatabaseUpdater | undefined): HealthCheck {
   return () => {
     const { loaded, buildDate, loadedAt, lastError } = databases.state(edition);
-    return { status: loaded ? 'ok' : STATUS_WITHOUT_EDITION[edition], buildDate, loadedAt, lastError };
+    const update = updater?.status(edition);
+    return { status: loaded ? 'ok' : STATUS_WITHOUT_EDITION[edition], buildDate, loadedAt, lastError, ...(update && { update }) };
   };
 }
 
-function createMetrics(databases: GeoDatabases) {
+function createMetrics(databases: GeoDatabases, updater: DatabaseUpdater | undefined) {
   const requests = new Counter('geoip_requests_total', 'Lookup requests by route and HTTP status code');
   const lookups = new Counter('geoip_lookups_total', 'Addresses looked up, by result');
   const batchDuration = new Summary('geoip_batch_duration_seconds', 'Time to answer a batch lookup');
@@ -71,17 +74,18 @@ function createMetrics(databases: GeoDatabases) {
       requests.render(),
       lookups.render(),
       batchDuration.render(),
+      ...(updater ? [updater.renderMetrics()] : []),
     ].join('\n') + '\n';
   };
 
   return { requests, lookups, batchDuration, render };
 }
 
-export function startServer({ port, databases, maxBatchSize }: ServerOptions) {
+export function startServer({ port, databases, maxBatchSize, updater }: ServerOptions) {
   const health = createHealthReporter('geo-ip-service', {
-    checks: Object.fromEntries(EDITIONS.map((edition) => [edition, databaseCheck(databases, edition)])),
+    checks: Object.fromEntries(EDITIONS.map((edition) => [edition, databaseCheck(databases, edition, updater)])),
   });
-  const metrics = createMetrics(databases);
+  const metrics = createMetrics(databases, updater);
 
   const finish = (route: string, response: Response) => {
     metrics.requests.inc({ route, code: String(response.status) });

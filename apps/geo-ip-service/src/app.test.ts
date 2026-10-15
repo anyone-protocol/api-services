@@ -1,8 +1,10 @@
 import { GeoIpClient, type GeoLocation } from '@anyone-protocol/geo-ip-client';
+import { createLogger } from '@anyone-protocol/service-kit';
 import { afterEach, describe, expect, it } from 'bun:test';
 import { join } from 'node:path';
 import { startServer } from './app';
 import { ASN, CITY, type Edition, GeoDatabases } from './databases';
+import { DatabaseUpdater } from './updater';
 
 const TEST_DATA = join(import.meta.dir, '..', 'test-data');
 const TEST_FILES: Record<Edition, string> = {
@@ -40,12 +42,15 @@ const TELSTRA: GeoLocation = { asNumber: 1221, asName: 'Telstra Pty Ltd' };
 
 let server: ReturnType<typeof startServer> | undefined;
 
-async function serve({ editions = [CITY, ASN], maxBatchSize = 10 }: { editions?: Edition[]; maxBatchSize?: number } = {}) {
+async function serve({ editions = [CITY, ASN], maxBatchSize = 10, withUpdater = false }: { editions?: Edition[]; maxBatchSize?: number; withUpdater?: boolean } = {}) {
   const databases = new GeoDatabases();
   for (const edition of editions) {
     await databases.load(edition, TEST_FILES[edition]);
   }
-  server = startServer({ port: 0, databases, maxBatchSize });
+  const updater = withUpdater
+    ? new DatabaseUpdater({ directory: TEST_DATA, databases, downloads: undefined, maxAgeMs: 0, minRequestIntervalMs: 0, logger: createLogger({ service: 'geo-ip-service', write: () => {} }) })
+    : undefined;
+  server = startServer({ port: 0, databases, maxBatchSize, updater });
   return server;
 }
 
@@ -171,6 +176,14 @@ describe('GET /healthz', () => {
     });
   });
 
+  it('reports the update status of each database', async () => {
+    await serve({ withUpdater: true });
+
+    expect(await (await get('/healthz')).json()).toMatchObject({
+      checks: { [CITY]: { status: 'ok', update: { enabled: false, lastOutcome: null, nextCheckAfter: null } } },
+    });
+  });
+
   it('is degraded without the ASN database and still answers lookups', async () => {
     await serve({ editions: [CITY] });
 
@@ -210,6 +223,17 @@ describe('GET /metrics', () => {
     expect(text).toContain('geoip_requests_total{route="single",code="200"} 1');
     expect(text).toContain('geoip_batch_duration_seconds_count 1');
     expect(text.endsWith('\n')).toBe(true);
+  });
+});
+
+describe('GET /metrics with database updates', () => {
+  it('adds the update metrics', async () => {
+    await serve({ withUpdater: true });
+
+    const text = await (await get('/metrics')).text();
+
+    expect(text).toContain('geoip_updates_enabled 0');
+    expect(text).toContain('# TYPE geoip_update_requests_total counter');
   });
 });
 

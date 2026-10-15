@@ -33,6 +33,7 @@ handleShutdownSignals([['http server', () => server.stop()]], { logger });
 | ------ | ------- | ------- |
 | `env.string()` | any value | `string` |
 | `env.integer()` | an optional minus sign and digits | `number` |
+| `env.durationMs()` | digits and a unit: `ms`, `s`, `m`, `h` or `d`, such as `30s` or `12h` | milliseconds as a `number` |
 | `env.url()` | an absolute URL | `string` |
 | `env.oneOf(values)` | one of `values`, exactly | the matching value |
 | `env.secret(parser)` | whatever `parser` accepts | the parsed value wrapped in a `Secret` |
