@@ -7,6 +7,9 @@
     "start": "bun src/main.ts"
   },
   "dependencies": {
-    "@anyone-protocol/service-kit": "workspace:*"
+    "@anyone-protocol/geo-ip-client": "workspace:*",
+    "@anyone-protocol/service-kit": "workspace:*",
+    "h3-js": "4.5.0",
+    "maxmind": "5.0.7"
   }
 }
