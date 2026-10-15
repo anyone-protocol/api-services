@@ -28,16 +28,7 @@ for (const [address, result] of results) {
 
 `stale` is `true` when the result comes from the cache past its TTL because the service could not be reached.
 
-`location` holds whatever the database has for the address. Every field is optional:
-
-| Field | Example |
-| ----- | ------- |
-| `coordinates` | `{ "latitude": -33.86, "longitude": 151.2 }` |
-| `countryCode`, `countryName` | `"AU"`, `"Australia"` |
-| `regionName`, `cityName` | `"New South Wales"`, `"Sydney"` |
-| `timeZone` | `"Australia/Sydney"` |
-| `asNumber`, `asName` | `13335`, `"CLOUDFLARENET"` |
-| `h3` | `{ "resolution": 4, "cell": "84be0e3ffffffff", "center": { "latitude": -33.7411, "longitude": 151.2858 } }`, present when the client was created with `h3Resolution` and the address has coordinates |
+`location` holds whatever the databases have for the address; its fields are listed in the [geo-ip-service API](../../apps/geo-ip-service/#post-lookup).
 
 ## Options
 
@@ -85,22 +76,4 @@ Cached results are never dropped for age, only when the cache is over `maxCacheE
 
 ## Protocol
 
-The client sends every lookup as `POST /lookup` with a JSON body:
-
-```json
-{ "addresses": ["1.1.1.1", "2001:db8::1", "not-an-address"], "h3Resolution": 4 }
-```
-
-and expects `200` with one result per address, each the result object above plus its `address`:
-
-```json
-{
-  "results": [
-    { "address": "1.1.1.1", "status": "found", "location": { "countryCode": "AU" } },
-    { "address": "2001:db8::1", "status": "not-found" },
-    { "address": "not-an-address", "status": "invalid" }
-  ]
-}
-```
-
-The request and response types are exported from this package as `BatchLookupRequest` and `BatchLookupResponse`, and the path as `BATCH_LOOKUP_PATH`.
+The client sends every lookup as a batch to `POST /lookup`, described in the [geo-ip-service API](../../apps/geo-ip-service/#api). The request and response types are exported from this package as `BatchLookupRequest` and `BatchLookupResponse`, and the path as `BATCH_LOOKUP_PATH`; geo-ip-service builds its answers from the same types.

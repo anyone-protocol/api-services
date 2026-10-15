@@ -49,10 +49,10 @@ Requires [Bun](https://bun.sh) at the release named in the `packageManager` fiel
 
 ```sh
 bun install
-bun run --filter geo-ip-service dev
+bun run --filter api-service dev
 ```
 
-`dev` restarts the service when a source file changes. Every service listens on `PORT`, default 3000, writes JSON log lines at `LOG_LEVEL`, default `info`, answers `GET /healthz`, and shuts down cleanly on `SIGTERM` or `SIGINT`. See [packages/service-kit](packages/service-kit/) for each of these. To run two services side by side, give each its own port:
+`dev` restarts the service when a source file changes. A service that needs more configuration lists it in its own README, for example [geo-ip-service](apps/geo-ip-service/#running-locally). Every service listens on `PORT`, default 3000, writes JSON log lines at `LOG_LEVEL`, default `info`, answers `GET /healthz`, and shuts down cleanly on `SIGTERM` or `SIGINT`. See [packages/service-kit](packages/service-kit/) for each of these. To run two services side by side, give each its own port:
 
 ```sh
 PORT=3001 bun run --filter api-service dev
