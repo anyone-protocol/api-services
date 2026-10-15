@@ -1,4 +1,5 @@
 import type { Logger } from '@anyone-protocol/service-kit';
+import { randomUUID } from 'node:crypto';
 import { mkdir, rename } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { databasePath, EDITIONS, type Edition, type GeoDatabases, openDatabase } from './databases';
@@ -171,8 +172,9 @@ export class DatabaseUpdater {
 
     const path = databasePath(this.#options.directory, edition);
     await mkdir(this.#options.directory, { recursive: true });
-    await Bun.write(`${path}.download`, bytes);
-    await rename(`${path}.download`, path);
+    const temporary = `${path}.${randomUUID()}.download`;
+    await Bun.write(temporary, bytes);
+    await rename(temporary, path);
     this.#options.databases.replace(edition, reader);
   }
 
@@ -192,8 +194,9 @@ export class DatabaseUpdater {
     const path = join(this.#options.directory, UPDATE_RECORDS_FILE);
     try {
       await mkdir(this.#options.directory, { recursive: true });
-      await Bun.write(`${path}.tmp`, `${JSON.stringify(records, null, 2)}\n`);
-      await rename(`${path}.tmp`, path);
+      const temporary = `${path}.${randomUUID()}.tmp`;
+      await Bun.write(temporary, `${JSON.stringify(records, null, 2)}\n`);
+      await rename(temporary, path);
     } catch (error) {
       this.#options.logger.error('Update records could not be written', { error });
     }
