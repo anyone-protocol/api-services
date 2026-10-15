@@ -40,6 +40,22 @@ describe('parseEnv', () => {
   });
 });
 
+describe('env.durationMs', () => {
+  it('reads a number with a unit as milliseconds', () => {
+    const config = parseEnv(
+      { A: env.durationMs(), B: env.durationMs(), C: env.durationMs(), D: env.durationMs(), E: env.durationMs() },
+      { A: '500ms', B: '30s', C: '15m', D: '12h', E: '3d' },
+    );
+
+    expect(config).toEqual({ A: 500, B: 30_000, C: 900_000, D: 43_200_000, E: 259_200_000 });
+  });
+
+  it('rejects a duration without a known unit', () => {
+    expect(() => parseEnv({ INTERVAL: env.durationMs() }, { INTERVAL: '12' })).toThrow('INTERVAL must be a duration');
+    expect(() => parseEnv({ INTERVAL: env.durationMs() }, { INTERVAL: '1.5h' })).toThrow('INTERVAL must be a duration');
+  });
+});
+
 describe('env.secret', () => {
   it('wraps the parsed value so it prints as redacted', () => {
     const config = parseEnv({ DB_PASS: env.secret(env.string()) }, { DB_PASS: 'env-secret-value' });

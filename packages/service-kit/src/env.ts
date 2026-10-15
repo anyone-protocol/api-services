@@ -45,6 +45,14 @@ function parseInteger(raw: string): number {
   return Number(raw);
 }
 
+const DURATION_UNITS_MS: Record<string, number> = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+
+function parseDuration(raw: string): number {
+  const match = /^(\d+)(ms|s|m|h|d)$/.exec(raw);
+  if (!match) throw new InvalidVariable('must be a duration such as 500ms, 30s, 15m, 12h or 3d');
+  return Number(match[1]) * (DURATION_UNITS_MS[match[2] ?? ''] ?? 0);
+}
+
 function parseUrl(raw: string): string {
   if (!URL.canParse(raw)) throw new InvalidVariable('must be an absolute URL');
   return raw;
@@ -67,6 +75,7 @@ function secret<T>(parse: EnvParser<T>): EnvParser<Secret<NonNullable<T>> | Extr
 export const env = {
   string: variable((raw) => raw),
   integer: variable(parseInteger),
+  durationMs: variable(parseDuration),
   url: variable(parseUrl),
   oneOf: oneOf as DefineOneOf,
   secret,

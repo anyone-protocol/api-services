@@ -1,6 +1,6 @@
 # geo-ip-service
 
-Resolves IP addresses to location and network data from the MaxMind GeoLite2 City and ASN databases. It is an internal service with no authentication, meant to be reached only by other services, never from the public edge. Services in this repository call it through [geo-ip-client](../../packages/geo-ip-client/).
+Resolves IP addresses to location and network data from the MaxMind GeoLite2 City and ASN databases, which it downloads and keeps up to date itself. It is an internal service with no authentication, meant to be reached only by other services, never from the public edge. Services in this repository call it through [geo-ip-client](../../packages/geo-ip-client/).
 
 ## Running locally
 
@@ -16,7 +16,7 @@ curl localhost:3000/lookup/89.160.20.112
 curl localhost:3000/lookup -H 'content-type: application/json' -d '{"addresses":["89.160.20.112","2001:480::1"],"h3Resolution":4}'
 ```
 
-The test databases hold only a few made-up networks; [test-data](test-data/) says where to find the list.
+The test databases hold only a few made-up networks; [test-data](test-data/) says where to find the list. To run the download and update cycle as well, see [Testing updates locally](#testing-updates-locally).
 
 ## Configuration
 
@@ -24,15 +24,69 @@ The test databases hold only a few made-up networks; [test-data](test-data/) say
 | -------- | ------- | ------- |
 | `GEOIP_DATA_DIR` | required | directory holding `GeoLite2-City.mmdb` and `GeoLite2-ASN.mmdb` |
 | `MAX_BATCH_SIZE` | `10000` | most addresses accepted in one batch lookup, the same as the client's default batch size |
+| `MAXMIND_ACCOUNT_ID` | none | MaxMind account ID; together with the license key it turns downloads on |
+| `MAXMIND_LICENSE_KEY` | none | MaxMind license key, handled as a [secret](../../packages/service-kit/#secrets) |
+| `MAXMIND_DOWNLOAD_URL` | `https://download.maxmind.com/geoip/databases` | where editions are downloaded from |
+| `GEOIP_CHECK_INTERVAL` | `1h` | how often the service decides whether an edition is due for an update; deciding makes no request |
+| `GEOIP_MAX_AGE` | `72h` | build age after which an edition is due for an update |
+| `MAXMIND_MIN_REQUEST_INTERVAL` | `12h` | least time between two requests to MaxMind for the same edition, kept across restarts |
 | `PORT`, `LOG_LEVEL` | | see [service-kit](../../packages/service-kit/#environment) |
+
+Durations are written as a number and a unit: `ms`, `s`, `m`, `h` or `d`. Setting only one of the two MaxMind credentials is a configuration error.
 
 ## Databases
 
-Both editions are loaded at startup. A file must hold the edition its name says, which is checked against the database's own metadata, so a City file in the ASN slot is refused.
+Both editions are loaded from `GEOIP_DATA_DIR` at startup, which in a deployment is a host volume, so a restart or redeploy uses the files already there. A file must hold the edition its name says, which is checked against the database's own metadata, so a City file in the ASN slot is refused.
 
 - Without the City edition the service is `down`: `/healthz` answers `503` and lookups answer `503`.
 - Without the ASN edition the service is `degraded`: lookups answer, and results have no `asNumber` or `asName`.
 - When loading an edition fails and an earlier copy of it is loaded, the earlier copy keeps serving and the failure is reported in `/healthz` and `/metrics`.
+
+`SIGHUP` reloads both editions from `GEOIP_DATA_DIR` without contacting MaxMind, for example after copying files onto the volume or running the [one-shot update](#one-shot-update):
+
+```sh
+nomad alloc signal -s SIGHUP <allocation>
+```
+
+## Updates
+
+With both MaxMind credentials set, the service keeps the databases current on its own. Every `GEOIP_CHECK_INTERVAL` it decides, per edition, whether the edition is due, and it contacts MaxMind only for an edition that is due:
+
+- the edition is not loaded, or its build is older than `GEOIP_MAX_AGE`, and
+- the last request to MaxMind for that edition was at least `MAXMIND_MIN_REQUEST_INTERVAL` ago.
+
+A fresh volume therefore costs one download per edition on the first start, and a restart with current files costs nothing. MaxMind publishes GeoLite2 twice a week, so with the defaults each edition is downloaded about twice a week, with a few checksum requests in between.
+
+An update of a due edition:
+
+1. Fetches the published SHA-256 checksum of the edition's archive. When it matches the archive installed last time, the edition is `unchanged` and nothing else is downloaded.
+2. Downloads the archive. The credentials go only to MaxMind in the `Authorization` header; MaxMind redirects the download to a file host, which gets no credentials.
+3. Checks the archive against the checksum, takes the `.mmdb` out of it, opens it, and checks that it is the right edition and not an older build than the one loaded.
+4. Writes it next to the current file, renames it over the current file, and swaps the new database in. Lookups in progress finish on the old one; no lookup fails during the swap.
+
+A failure at any step leaves the current file and database in place. Each attempt is recorded per edition in `update-state.json` in `GEOIP_DATA_DIR`, with its time, outcome, error and archive checksum; this record is what keeps the request interval across restarts, so leave it on the volume. `/healthz` shows it per edition under `update`, along with `nextCheckAfter`, the earliest time the service will contact MaxMind for the edition again.
+
+While an update runs, the service holds the downloaded archive, the unpacked archive and the new database in memory next to the database being replaced. Size the job's memory for that, with the City edition as the large one.
+
+Without credentials the service never contacts MaxMind and only loads the files it finds, which suits local development and a volume filled by hand.
+
+## One-shot update
+
+`src/update.ts` runs one update with the same code as the service, ignoring the schedule and the request interval, and always downloads. It installs into `GEOIP_DATA_DIR` or `--dir`, logs each edition's outcome, and exits `0` when every edition was installed and `1` otherwise. Use it to check the credentials and the download path right away instead of waiting for the schedule, or to fill a volume.
+
+```sh
+bun apps/geo-ip-service/src/update.ts --dir /tmp/geoip-check
+bun apps/geo-ip-service/src/update.ts --edition GeoLite2-ASN
+```
+
+In a deployment, run it inside the service's allocation, where the credentials and the volume are already in place, then signal the service to load the new files:
+
+```sh
+nomad alloc exec <allocation> bun apps/geo-ip-service/src/update.ts
+nomad alloc signal -s SIGHUP <allocation>
+```
+
+Every run downloads each edition, so run it only when needed.
 
 ## API
 
@@ -107,7 +161,7 @@ Looks up one address, with `h3Resolution` as an optional query parameter: `GET /
 
 ### `GET /healthz`
 
-The [service-kit health report](../../packages/service-kit/#health) with one check per edition, holding its `buildDate`, its `loadedAt` time and the `lastError` of its last load, if that failed.
+The [service-kit health report](../../packages/service-kit/#health) with one check per edition, holding its `buildDate`, its `loadedAt` time, the `lastError` of its last load, if that failed, and its [update](#updates) record under `update`.
 
 ### `GET /metrics`
 
@@ -122,7 +176,29 @@ Metrics in the Prometheus text format:
 | `geoip_lookups_total` | counter | `status` | addresses looked up, by result |
 | `geoip_requests_total` | counter | `route`, `code` | lookup requests by route (`batch` or `single`) and HTTP status |
 | `geoip_batch_duration_seconds` | summary | | time to answer a batch, from receiving it to the encoded answer |
+| `geoip_updates_enabled` | gauge | | `1` when MaxMind credentials are set and the service downloads updates |
+| `geoip_update_last_attempt_timestamp_seconds` | gauge | `edition` | time of the last request to MaxMind for the edition |
+| `geoip_update_requests_total` | counter | `edition`, `outcome` | update attempts by outcome: `downloaded`, `unchanged` or `failed` |
 
 ## Tests
 
-The tests run against MaxMind's test databases in [test-data](test-data/), so they need no license key or network access.
+The tests run against MaxMind's test databases in [test-data](test-data/), so they need no license key or network access. Update tests run against a stub of the MaxMind download service in [src/testing/maxmind-stub.ts](src/testing/maxmind-stub.ts), which serves the test databases as archives; each test sets the stub up for the scenario it needs.
+
+## Testing updates locally
+
+The stub also runs on its own, which lets the real service go through download and update cycles in seconds without contacting MaxMind:
+
+```sh
+bun apps/geo-ip-service/src/testing/maxmind-stub.ts
+```
+
+In another terminal, run the service against it with a short schedule and an empty directory:
+
+```sh
+GEOIP_DATA_DIR=/tmp/geoip-stub \
+MAXMIND_DOWNLOAD_URL=http://localhost:4000/ MAXMIND_ACCOUNT_ID=000000 MAXMIND_LICENSE_KEY=stub-license-key \
+GEOIP_CHECK_INTERVAL=1s GEOIP_MAX_AGE=1s MAXMIND_MIN_REQUEST_INTERVAL=5s \
+bun run --filter geo-ip-service dev
+```
+
+It downloads both editions at once, then checks the checksum every five seconds and reports `unchanged`. `curl localhost:3000/healthz` shows each edition's update record and next check. The one-shot update runs against the stub with the same variables.
