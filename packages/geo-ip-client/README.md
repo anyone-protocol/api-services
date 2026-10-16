@@ -34,7 +34,7 @@ for (const [address, result] of results) {
 
 | Option | Default | Meaning |
 | ------ | ------- | ------- |
-| `baseUrl` | required | base URL of `geo-ip-service`, for example `http://10.1.0.5:3000` |
+| `baseUrl` | required | base URL of `geo-ip-service`, for example `http://10.1.0.5:3000`, or a function returning it; see [Address](#address) |
 | `h3Resolution` | none | H3 resolution to ask for with every lookup |
 | `cacheTtlMs` | one hour | age after which a cached result is asked for again |
 | `maxCacheEntries` | 50,000 | entries kept; beyond this the least recently refreshed are dropped |
@@ -42,6 +42,18 @@ for (const [address, result] of results) {
 | `requestTimeoutMs` | five seconds | time allowed for one request |
 | `retryAfterFailureMs` | 30 seconds | time after a failed request during which the client does not ask again |
 | `logger` | none | anything with a `warn(message, fields)` method, such as the `service-kit` logger; failed requests are logged through it |
+
+## Address
+
+`baseUrl` can be a function, which the client calls before every request, so the address can change while the client and its cache live on. A function that returns `undefined` or an empty string counts as a failed request, without contacting anything.
+
+`urlFromFile(path)` returns such a function. It reads the file on every call and returns its trimmed contents, or `undefined` while the file is missing or blank. This fits a Nomad template that renders the address of `geo-ip-service` into a file without restarting the task, as [operations](../../operations/#reaching-it-from-another-job) describes:
+
+```ts
+import { GeoIpClient, urlFromFile } from '@anyone-protocol/geo-ip-client';
+
+const geo = new GeoIpClient({ baseUrl: urlFromFile('/local/geo-ip-service-url'), logger });
+```
 
 ## Cache and failure behavior
 
