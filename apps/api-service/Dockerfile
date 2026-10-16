@@ -18,4 +18,4 @@ COPY apps/api-service ./apps/api-service
 
 USER bun
 EXPOSE 3000
-CMD ["bun", "apps/api-service/src/main.ts"]
+CMD ["bun", "--max-http-header-size=80000", "apps/api-service/src/main.ts"]
