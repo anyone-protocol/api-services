@@ -66,7 +66,7 @@ An update of a due edition:
 
 The license key travels in the query string of the request to MaxMind, which is the form MaxMind accepts with a license key alone. It goes only to MaxMind over HTTPS, error messages never include the URL, and the logger redacts the key wherever it appears, URL-encoded or not.
 
-A failure at any step leaves the current file and database in place. Each attempt is recorded per edition in `update-state.json` in `GEOIP_DATA_DIR`, with its time, outcome, error, release and archive checksum; this record is what keeps the request interval across restarts, so leave it on the volume. `/healthz` shows it per edition under `update`, along with `nextCheckAfter`, the earliest time the service will contact MaxMind for the edition again.
+A failure at any step leaves the current file and database in place. Each attempt is recorded per edition in `update-state.json` in `GEOIP_DATA_DIR`, with its time, outcome, error, release and archive checksum; this record is what keeps the request interval across restarts, so leave it on the volume. If the record cannot be written, the service still keeps the interval for its own attempts until it restarts. `/healthz` shows it per edition under `update`, along with `nextCheckAfter`, the earliest time the service will contact MaxMind for the edition again.
 
 While an update runs, the service holds the downloaded archive, the unpacked archive and the new database in memory next to the database being replaced. Size the job's memory for that, with the City edition as the large one.
 

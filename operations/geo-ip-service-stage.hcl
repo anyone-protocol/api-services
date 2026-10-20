@@ -1,7 +1,7 @@
 variable "commit_sha" {
   type        = string
   description = "Commit whose geo-ip-service image to run"
-  default     = "f258bcc19c7cbb9067c1380e82c81123eb5f5add"
+  default     = "be5303e389fba3bf4cb96921de311be17304c1ff"
 }
 
 job "geo-ip-service-stage" {
@@ -56,6 +56,7 @@ job "geo-ip-service-stage" {
 
     task "geo-ip-service-stage-task" {
       driver = "docker"
+      user   = "root"
 
       config {
         image      = "ghcr.io/anyone-protocol/api-services/geo-ip-service:${var.commit_sha}"

@@ -38,6 +38,20 @@ export interface DatabaseUpdaterOptions {
 
 const NO_ATTEMPT: UpdateRecord = { lastAttemptAt: null, lastOutcome: null, lastError: null, release: null, archiveSha256: null };
 
+function attemptTime(record: UpdateRecord | undefined): number {
+  return record?.lastAttemptAt ? Date.parse(record.lastAttemptAt) : -Infinity;
+}
+
+function latestAttempts(known: UpdateRecords, stored: UpdateRecords): UpdateRecords {
+  const latest: UpdateRecords = { ...stored };
+  for (const edition of EDITIONS) {
+    if (attemptTime(known[edition]) > attemptTime(stored[edition])) {
+      latest[edition] = known[edition];
+    }
+  }
+  return latest;
+}
+
 function sha256(bytes: Uint8Array): string {
   return new Bun.CryptoHasher('sha256').update(bytes).digest('hex');
 }
@@ -180,12 +194,13 @@ export class DatabaseUpdater {
 
   async #readRecords(): Promise<UpdateRecords> {
     const file = Bun.file(join(this.#options.directory, UPDATE_RECORDS_FILE));
+    let stored: UpdateRecords = {};
     try {
-      this.#records = (await file.exists()) ? ((await file.json()) as UpdateRecords) : {};
+      stored = (await file.exists()) ? ((await file.json()) as UpdateRecords) : {};
     } catch (error) {
-      this.#options.logger.warn('Update records unreadable, starting from none', { error });
-      this.#records = {};
+      this.#options.logger.warn('Update records unreadable', { error });
     }
+    this.#records = latestAttempts(this.#records, stored);
     return this.#records;
   }
 
