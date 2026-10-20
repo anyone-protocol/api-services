@@ -6,14 +6,14 @@ Nomad job definitions for running the services on the Anyone cluster. Deployment
 | ---- | ---- |
 | [geo-ip-service-stage.hcl](geo-ip-service-stage.hcl) | geo-ip-service in `stage-services`, on the `stage` pool |
 | [geo-ip-service-live.hcl](geo-ip-service-live.hcl) | geo-ip-service in `live-services`, on the `live-services` pool |
-| [api-service-parity-stage.hcl](api-service-parity-stage.hcl) | the ported api-service next to the running one in `stage-services`, for the [parity run](#api-service-parity-run-on-stage) |
+| [api-service-stage.hcl](api-service-stage.hcl) | api-service behind Varnish in `stage-services`, on the `stage` pool |
 
 ## Choosing a commit
 
-Every job takes `commit_sha`, the commit whose image it runs, and pins a default. Continuous integration publishes a service's image only for commits that changed the service or a package it uses, so pick a commit that did. For geo-ip-service, the latest one on the default branch is:
+Every job takes `commit_sha`, the commit whose image it runs, and pins a default. Continuous integration publishes a service's image only for commits that changed the service or a package it uses, so pick a commit that did. For a service under `apps/<service>`, the latest one on the default branch is:
 
 ```sh
-git log -1 --format=%H origin/master -- apps/geo-ip-service packages package.json bun.lock tsconfig.json .dockerignore
+git log -1 --format=%H origin/master -- apps/<service> packages package.json bun.lock tsconfig.json .dockerignore
 ```
 
 ```sh
@@ -120,38 +120,22 @@ nomad alloc exec -namespace <namespace> -task <task> <allocation> sh -c 'wget -q
 
 From outside the WireGuard network, the same address and port do not answer.
 
-## api-service parity run on stage
+## api-service
 
-The parity job runs the ported api-service next to `api-service-stage`, with the same upstreams, so the two can be compared before the ported one replaces it. It is reachable only on WireGuard: it has no Traefik tags and no Varnish, and no other job reads its Consul service `api-service-parity-stage`. `GEO_IP_CACHE_TTL` is `2m` so that cached locations go stale within the checks below.
+What the stage job sets up:
 
-A job reads only the Vault path named after it, so before the first run the database credentials go to `kv/stage-services/api-service-parity-stage`, under `DB_USER` and `DB_PASS`, the same values as `kv/stage-services/api-service-stage`. The copy lives only as long as the parity job; at the cutover this job definition becomes `api-service-stage`, which reads the original path.
+- One allocation on the `stage` pool with two tasks on one network: api-service on port 3000 and Varnish in front of it on port 8080. A new version starts as a canary next to the running one and is promoted once healthy, or reverted; it has ten minutes to become healthy.
+- The Consul service `api-service-stage` on a dynamic port on the `wireguard` host network, mapped to Varnish, with the Traefik tags that publish it as `api-stage.ec.anyone.tech`.
+- An HTTP check on `/healthz` sent to the allocation's own address through Varnish, so it covers both tasks. The service reports `degraded` rather than `down` while geo-ip-service is unavailable, so the check keeps passing then.
+- The geo-ip-service address in a file, as [Reaching it from another job](#reaching-it-from-another-job) describes.
+- The UNS indexer database credentials from Vault at `kv/stage-services/api-service-stage`, under `DB_USER` and `DB_PASS`.
 
-```sh
-nomad job run operations/api-service-parity-stage.hcl
-```
+Varnish:
 
-### Parity
-
-From inside the allocation, against the running service through its public hostname:
-
-```sh
-nomad alloc exec -namespace stage-services -task api-service-parity-stage-task <allocation> \
-  bun apps/api-service/parity/parity.ts --old https://api-stage.ec.anyone.tech --new http://127.0.0.1:3000
-```
-
-The [parity check](../apps/api-service/#parity-check) describes what it compares. Map differences for single relays usually mean the two services read different GeoLite2 releases; the running service loads its databases only when it starts.
-
-### geo-ip-service outages
-
-1. Request `/relay-map/` and `/fingerprint-map/` once, then stop geo-ip-service with `nomad job stop -namespace stage-services geo-ip-service-stage`. After more than two minutes both maps still answer `200` with the same relays, and `/healthz` reports `geoIp` as `degraded`.
-2. With geo-ip-service still stopped, restart the parity allocation. Both maps answer `503` with `Relay geolocation is unavailable`, and every other route answers as before.
-3. Run geo-ip-service again. It loads its databases from the volume and comes up on a new port. The parity job picks up the new address without restarting, the maps answer `200` again, and `/healthz` reports `geoIp` as `ok`.
-
-Afterwards, stop the parity job and delete every version of its copy of the credentials:
+- Caches successful and `4xx` responses for five minutes. A `5xx` is never cached, so the next request goes to the service again.
+- Never caches `/healthz`.
+- Accepts requests of up to 128 KB, above the service's own limit of 80 KB, so an oversized request gets `431` from the service instead of a dropped connection.
 
 ```sh
-nomad job stop -purge -namespace stage-services api-service-parity-stage
-vault kv metadata delete kv/stage-services/api-service-parity-stage
+nomad job run -var commit_sha=<sha> operations/api-service-stage.hcl
 ```
-
-`vault kv delete` is not enough: it marks only the latest version deleted, and the values stay recoverable.
