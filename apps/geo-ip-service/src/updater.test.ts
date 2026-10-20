@@ -16,13 +16,13 @@ let directory: string;
 let clock: number;
 let logLines: Record<string, unknown>[];
 
-function updater({ databases = new GeoDatabases(() => clock), licensed = true } = {}) {
+function updater({ databases = new GeoDatabases(() => clock), licensed = true, volume = directory } = {}) {
   const logger = createLogger({ service: 'geo-ip-service', write: (line) => logLines.push(JSON.parse(line)) });
   const downloads = new MaxMindDownloads({ baseUrl: stub.downloadUrl, licenseKey: new Secret(STUB_LICENSE_KEY) });
   return {
     databases,
     updater: new DatabaseUpdater({
-      directory,
+      directory: volume,
       databases,
       downloads: licensed ? downloads : undefined,
       maxAgeMs: 72 * HOUR,
@@ -259,6 +259,25 @@ describe('two allocations sharing a volume', () => {
 });
 
 describe('update records', () => {
+  it('keeps the minimum request interval when the volume cannot be written', async () => {
+    const volume = join(directory, 'not-a-directory');
+    await Bun.write(volume, '');
+    const { updater: geo } = updater({ volume });
+
+    await geo.checkAll();
+    expect(geo.status(CITY).lastOutcome).toBe('failed');
+    expect(logLines).toContainEqual(expect.objectContaining({ level: 'error', message: 'Update records could not be written' }));
+    const before = stub.requests.length;
+
+    clock += 12 * HOUR - 1;
+    await geo.checkAll();
+    expect(requestsSince(before)).toEqual([]);
+
+    clock += 1;
+    await geo.checkAll();
+    expect(requestsSince(before)).toHaveLength(8);
+  });
+
   it('starts from no records when the file is unreadable', async () => {
     await Bun.write(join(directory, UPDATE_RECORDS_FILE), 'not json');
     const { updater: geo } = updater();
@@ -266,6 +285,6 @@ describe('update records', () => {
     await geo.checkAll();
 
     expect(geo.status(CITY).lastOutcome).toBe('downloaded');
-    expect(logLines).toContainEqual(expect.objectContaining({ level: 'warn', message: 'Update records unreadable, starting from none' }));
+    expect(logLines).toContainEqual(expect.objectContaining({ level: 'warn', message: 'Update records unreadable' }));
   });
 });

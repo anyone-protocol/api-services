@@ -26,7 +26,7 @@ What the job sets up, per environment:
 - One allocation on the environment's services pool. A new version starts as a canary next to the running one and is promoted once healthy, or reverted.
 - A dynamic port on the `wireguard` host network, mapped to the service's port 3000. The job has no Traefik tags, so the service is not on the public edge.
 - The Consul service `geo-ip-service-<env>` with an HTTP check on `/healthz`. The check is critical while the City database is not loaded and passing otherwise. A failing check does not restart the task, since a restart does not bring a database back.
-- The host volume `geo-ip-service-<env>` at `/data`, holding the databases and the update record between restarts and deploys.
+- The host volume `geo-ip-service-<env>` at `/data`, holding the databases and the update record between restarts and deploys. The task runs as root, like the cluster's other jobs, so it can write to a volume owned by `nomad:docker`.
 - The MaxMind license key from Vault, which turns on [database updates](../apps/geo-ip-service/#updates).
 - 512 MB of memory, which covers an update: the old and new City databases and the downloaded archive are in memory at the same time.
 
@@ -34,11 +34,11 @@ What the job sets up, per environment:
 
 Once per environment.
 
-1. Create the host volume on the client in the environment's services pool. The directory belongs to uid and gid 1000, the `bun` user the image runs as.
+1. Create the host volume on the client in the environment's services pool, owned by `nomad:docker` like the cluster's other volumes.
 
    ```sh
    sudo mkdir -p /opt/volumes/geo-ip-service-stage
-   sudo chown 1000:1000 /opt/volumes/geo-ip-service-stage
+   sudo chown nomad:docker /opt/volumes/geo-ip-service-stage
    ```
 
    Register it in the `client` block of `/etc/nomad.d/nomad.hcl`, restart the Nomad agent, and check that `nomad node status -verbose <node>` lists it:
@@ -60,10 +60,11 @@ nomad job run -var commit_sha=<sha> operations/geo-ip-service-stage.hcl
 
 On an empty volume the service starts without databases, reports `down`, and downloads both editions right away; the check passes once the City edition is loaded. Its logs show `Database downloaded` for each edition, and `/healthz` shows each edition's build date and update record.
 
-Its current address:
+Its current address is under Allocation Addresses in the allocation's status:
 
 ```sh
-nomad service info -namespace stage-services geo-ip-service-stage
+nomad job allocs -namespace stage-services geo-ip-service-stage
+nomad alloc status -namespace stage-services <allocation>
 ```
 
 Updating the databases by hand, reloading them and the update schedule are described in the [service README](../apps/geo-ip-service/#updates).
