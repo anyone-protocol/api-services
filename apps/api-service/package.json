@@ -3,10 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/main.ts",
-    "start": "bun src/main.ts"
+    "dev": "bun --max-http-header-size=80000 --watch src/main.ts",
+    "start": "bun --max-http-header-size=80000 src/main.ts"
   },
   "dependencies": {
-    "@anyone-protocol/service-kit": "workspace:*"
+    "@anyone-protocol/geo-ip-client": "workspace:*",
+    "@anyone-protocol/service-kit": "workspace:*",
+    "h3-js": "4.5.0"
   }
 }

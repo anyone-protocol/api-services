@@ -12,7 +12,9 @@
     "apps/api-service": {
       "name": "api-service",
       "dependencies": {
+        "@anyone-protocol/geo-ip-client": "workspace:*",
         "@anyone-protocol/service-kit": "workspace:*",
+        "h3-js": "4.5.0",
       },
     },
     "apps/geo-ip-service": {
