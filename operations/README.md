@@ -124,7 +124,7 @@ From outside the WireGuard network, the same address and port do not answer.
 
 The parity job runs the ported api-service next to `api-service-stage`, with the same upstreams, so the two can be compared before the ported one replaces it. It is reachable only on WireGuard: it has no Traefik tags and no Varnish, and no other job reads its Consul service `api-service-parity-stage`. `GEO_IP_CACHE_TTL` is `2m` so that cached locations go stale within the checks below.
 
-A job reads only the Vault path named after it, so before the first run the database credentials go to `kv/stage-services/api-service-parity-stage`, under `DB_USER` and `DB_PASS`, the same values as `kv/stage-services/api-service-stage`.
+A job reads only the Vault path named after it, so before the first run the database credentials go to `kv/stage-services/api-service-parity-stage`, under `DB_USER` and `DB_PASS`, the same values as `kv/stage-services/api-service-stage`. The copy lives only as long as the parity job; at the cutover this job definition becomes `api-service-stage`, which reads the original path.
 
 ```sh
 nomad job run operations/api-service-parity-stage.hcl
@@ -147,4 +147,11 @@ The [parity check](../apps/api-service/#parity-check) describes what it compares
 2. With geo-ip-service still stopped, restart the parity allocation. Both maps answer `503` with `Relay geolocation is unavailable`, and every other route answers as before.
 3. Run geo-ip-service again. It loads its databases from the volume and comes up on a new port. The parity job picks up the new address without restarting, the maps answer `200` again, and `/healthz` reports `geoIp` as `ok`.
 
-Stop the parity job afterwards with `nomad job stop -namespace stage-services api-service-parity-stage`.
+Afterwards, stop the parity job and delete every version of its copy of the credentials:
+
+```sh
+nomad job stop -purge -namespace stage-services api-service-parity-stage
+vault kv metadata delete kv/stage-services/api-service-parity-stage
+```
+
+`vault kv delete` is not enough: it marks only the latest version deleted, and the values stay recoverable.
