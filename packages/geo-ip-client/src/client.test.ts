@@ -160,27 +160,3 @@ describe('when geo-ip-service fails', () => {
     expect(geo.state()).toMatchObject({ failing: false, lastSuccessAt: new Date(30_000).toISOString() });
   });
 });
-
-describe('address', () => {
-  it('resolves the address for every request when given a function', async () => {
-    const other = new StubGeoIpService();
-    let current = stub.server.url.href;
-    const geo = client({ baseUrl: () => current, cacheTtlMs: HOUR });
-
-    await geo.lookup('1.1.1.1');
-    current = other.server.url.href;
-    await geo.lookup('2001:db8::1');
-
-    expect(stub.requests).toEqual([{ addresses: ['1.1.1.1'] }]);
-    expect(other.requests).toEqual([{ addresses: ['2001:db8::1'] }]);
-    await other.server.stop(true);
-  });
-
-  it('treats an unknown address as a failure without sending a request', async () => {
-    const geo = client({ baseUrl: () => undefined });
-
-    expect(await geo.lookup('1.1.1.1')).toEqual({ status: 'unavailable' });
-    expect(stub.requests).toHaveLength(0);
-    expect(geo.state()).toMatchObject({ failing: true, lastError: 'geo-ip-service address is not known' });
-  });
-});

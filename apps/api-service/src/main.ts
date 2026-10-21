@@ -34,7 +34,7 @@ const server = startServer({
     { cluster: config.CLUSTER, env: config.ENV, instance: config.ONIONOO_INSTANCE, job: config.JOB },
     { from: config.FROM, to: config.TO, interval: config.INTERVAL },
   ),
-  geo: new GeoIpClient({ baseUrl: config.geoIpServiceUrl, cacheTtlMs: config.GEO_IP_CACHE_TTL, logger }),
+  geo: new GeoIpClient({ baseUrl: config.GEO_IP_SERVICE_URL, cacheTtlMs: config.GEO_IP_CACHE_TTL, logger }),
   hexagonResolution: config.HEXAGON_RESOLUTION,
   operatorRegistry: new OperatorRegistry({
     nodeUrl: config.HB_URL,
@@ -50,7 +50,7 @@ logger.info('Listening', {
   port: server.port,
   onionoo: config.ONIONOO_INSTANCE,
   operatorRegistryProcessId: config.OPERATOR_REGISTRY_PROCESS_ID,
-  geoIpService: config.GEO_IP_SERVICE_URL_FILE ?? config.GEO_IP_SERVICE_URL,
+  geoIpService: config.GEO_IP_SERVICE_URL,
 });
 
 handleShutdownSignals(

@@ -73,25 +73,22 @@ Updating the databases by hand, reloading them and the update schedule are descr
 
 ### Reaching it from another job
 
-The port changes with every deploy, so a consumer must not take the address once at startup, and must not restart when it changes. A consumer renders the address into a file with a template that never restarts the task, and reads the file whenever it makes a request:
+The port changes with every deploy. A consumer takes the address from Consul in its env template, as it does for its other dependencies, and restarts when the address changes:
 
 ```hcl
 template {
   data        = <<-EOH
-  {{- $url := "" -}}
-  {{- range service "geo-ip-service-stage|any" -}}
-    {{- if or (eq $url "") (eq .Status "passing") }}{{ $url = printf "http://%s:%d" .Address .Port }}{{ end -}}
-  {{- end -}}
-  {{ $url }}
+  {{- range service "geo-ip-service-stage|any" }}
+  GEO_IP_SERVICE_URL="http://{{ .Address }}:{{ .Port }}"
+  {{- end }}
   EOH
-  destination = "local/geo-ip-service-url"
-  change_mode = "noop"
+  destination = "local/config.env"
+  env         = true
 }
 ```
 
-- `change_mode = "noop"`: a redeploy or a health change of geo-ip-service rewrites the file and leaves the consumer running.
-- `|any` with the `passing` preference: the file holds a passing instance when there is one, and otherwise keeps the address of an unhealthy one rather than going empty while its health flaps.
-- The file is empty only while no instance is registered at all; treat that as geo-ip-service being unavailable.
+- A redeploy of geo-ip-service changes the address, re-renders the template and restarts the consumer.
+- `|any` keeps the instance in the template while its health check fails, so a health change alone does not restart the consumer.
 - The task needs a `consul {}` block for the template to see the service.
 
 Consumers in other environments use `geo-ip-service-live` the same way.
@@ -128,7 +125,7 @@ What the job sets up, per environment:
 - One allocation on the environment's services pool with two tasks on one network: api-service on port 3000 and Varnish in front of it on port 8080. A new version starts as a canary next to the running one and is promoted once healthy, or reverted; it has ten minutes to become healthy.
 - The Consul service `api-service-<env>` on a dynamic port on the `wireguard` host network, mapped to Varnish, with the Traefik tags that publish it as `api-stage.ec.anyone.tech` on stage and `api.ec.anyone.tech` on live.
 - An HTTP check on `/healthz` sent to the allocation's own address through Varnish, so it covers both tasks. The service reports `degraded` rather than `down` while geo-ip-service is unavailable, so the check keeps passing then.
-- The geo-ip-service address in a file, as [Reaching it from another job](#reaching-it-from-another-job) describes.
+- The geo-ip-service address from Consul, as [Reaching it from another job](#reaching-it-from-another-job) describes.
 - The UNS indexer database credentials from Vault at `kv/<env>-services/api-service-<env>`, under `DB_USER` and `DB_PASS`.
 
 Varnish:
