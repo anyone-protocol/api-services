@@ -1,7 +1,7 @@
 variable "commit_sha" {
   type        = string
   description = "Commit whose geo-ip-service image to run"
-  default     = "be5303e389fba3bf4cb96921de311be17304c1ff"
+  default     = "75ae786042adab24e328b71f2a08b378a655c429"
 }
 
 job "geo-ip-service-stage" {
@@ -46,11 +46,12 @@ job "geo-ip-service-stage" {
       tags = ["logging"]
 
       check {
-        name     = "geo-ip-service health"
-        type     = "http"
-        path     = "/healthz"
-        interval = "10s"
-        timeout  = "5s"
+        name         = "geo-ip-service health"
+        type         = "http"
+        path         = "/healthz"
+        interval     = "10s"
+        timeout      = "5s"
+        address_mode = "alloc"
       }
     }
 

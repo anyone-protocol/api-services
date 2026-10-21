@@ -7,6 +7,7 @@ Nomad job definitions for running the services on the Anyone cluster. Deployment
 | [geo-ip-service-stage.hcl](geo-ip-service-stage.hcl) | geo-ip-service in `stage-services`, on the `stage` pool |
 | [geo-ip-service-live.hcl](geo-ip-service-live.hcl) | geo-ip-service in `live-services`, on the `live-services` pool |
 | [api-service-stage.hcl](api-service-stage.hcl) | api-service behind Varnish in `stage-services`, on the `stage` pool |
+| [api-service-live.hcl](api-service-live.hcl) | api-service behind Varnish in `live-services`, on the `live-services` pool |
 
 ## Choosing a commit
 
@@ -26,7 +27,7 @@ What the job sets up, per environment:
 
 - One allocation on the environment's services pool. A new version starts as a canary next to the running one and is promoted once healthy, or reverted.
 - A dynamic port on the `wireguard` host network, mapped to the service's port 3000. The job has no Traefik tags, so the service is not on the public edge.
-- The Consul service `geo-ip-service-<env>` with an HTTP check on `/healthz`. The check is critical while the City database is not loaded and passing otherwise. A failing check does not restart the task, since a restart does not bring a database back.
+- The Consul service `geo-ip-service-<env>` with an HTTP check on `/healthz`, sent to the allocation's own address. The check is critical while the City database is not loaded and passing otherwise. A failing check does not restart the task, since a restart does not bring a database back.
 - The host volume `geo-ip-service-<env>` at `/data`, holding the databases and the update record between restarts and deploys. The task runs as root, like the cluster's other jobs, so it can write to a volume owned by `nomad:docker`.
 - The MaxMind license key from Vault, which turns on [database updates](../apps/geo-ip-service/#updates).
 - 512 MB of memory, which covers an update: the old and new City databases and the downloaded archive are in memory at the same time.
@@ -122,13 +123,13 @@ From outside the WireGuard network, the same address and port do not answer.
 
 ## api-service
 
-What the stage job sets up:
+What the job sets up, per environment:
 
-- One allocation on the `stage` pool with two tasks on one network: api-service on port 3000 and Varnish in front of it on port 8080. A new version starts as a canary next to the running one and is promoted once healthy, or reverted; it has ten minutes to become healthy.
-- The Consul service `api-service-stage` on a dynamic port on the `wireguard` host network, mapped to Varnish, with the Traefik tags that publish it as `api-stage.ec.anyone.tech`.
+- One allocation on the environment's services pool with two tasks on one network: api-service on port 3000 and Varnish in front of it on port 8080. A new version starts as a canary next to the running one and is promoted once healthy, or reverted; it has ten minutes to become healthy.
+- The Consul service `api-service-<env>` on a dynamic port on the `wireguard` host network, mapped to Varnish, with the Traefik tags that publish it as `api-stage.ec.anyone.tech` on stage and `api.ec.anyone.tech` on live.
 - An HTTP check on `/healthz` sent to the allocation's own address through Varnish, so it covers both tasks. The service reports `degraded` rather than `down` while geo-ip-service is unavailable, so the check keeps passing then.
 - The geo-ip-service address in a file, as [Reaching it from another job](#reaching-it-from-another-job) describes.
-- The UNS indexer database credentials from Vault at `kv/stage-services/api-service-stage`, under `DB_USER` and `DB_PASS`.
+- The UNS indexer database credentials from Vault at `kv/<env>-services/api-service-<env>`, under `DB_USER` and `DB_PASS`.
 
 Varnish:
 
