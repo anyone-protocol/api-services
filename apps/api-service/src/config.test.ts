@@ -30,26 +30,14 @@ describe('loadConfig', () => {
       OPERATOR_REGISTRY_CACHE_TTL_SECONDS: 0,
       DB_PORT: 5432,
       UNS_DOMAINS_CACHE_TTL_SECONDS: 30,
-      geoIpServiceUrl: 'http://10.1.0.7:24312',
     });
   });
 
-  it.each(['HB_URL', 'OPERATOR_REGISTRY_PROCESS_ID', 'ONIONOO_INSTANCE', 'VICTORIA_METRICS_ADDRESS', 'DB_HOST'])('fails closed without %s', (name) => {
+  it.each(['HB_URL', 'OPERATOR_REGISTRY_PROCESS_ID', 'ONIONOO_INSTANCE', 'VICTORIA_METRICS_ADDRESS', 'GEO_IP_SERVICE_URL', 'DB_HOST'])('fails closed without %s', (name) => {
     expect(() => loadConfig({ ...REQUIRED, [name]: undefined })).toThrow(`${name} is required`);
   });
 
-  it('reads the geo-ip-service address from a file when given one', () => {
-    const { geoIpServiceUrl } = loadConfig({ ...REQUIRED, GEO_IP_SERVICE_URL: undefined, GEO_IP_SERVICE_URL_FILE: '/nonexistent/geo-ip-service-url' });
-
-    expect(typeof geoIpServiceUrl).toBe('function');
-    expect(typeof geoIpServiceUrl === 'function' && geoIpServiceUrl()).toBeUndefined();
-  });
-
-  const GEO_IP_SOURCE = 'exactly one of GEO_IP_SERVICE_URL and GEO_IP_SERVICE_URL_FILE is required';
-
   it.each([
-    ['no geo-ip-service address', { GEO_IP_SERVICE_URL: undefined }, GEO_IP_SOURCE],
-    ['two geo-ip-service addresses', { GEO_IP_SERVICE_URL_FILE: '/local/geo-ip-service-url' }, GEO_IP_SOURCE],
     ['an H3 resolution above 15', { HEXAGON_RESOLUTION: '16' }, 'HEXAGON_RESOLUTION must be from 0 to 15'],
     ['a zero Onionoo timeout', { ONIONOO_DETAILS_TIMEOUT_SECONDS: '0' }, 'ONIONOO_DETAILS_TIMEOUT_SECONDS must be greater than 0'],
     ['a negative cache TTL', { UNS_DOMAINS_CACHE_TTL_SECONDS: '-1' }, 'UNS_DOMAINS_CACHE_TTL_SECONDS must not be negative'],

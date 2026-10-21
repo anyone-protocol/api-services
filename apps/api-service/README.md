@@ -32,8 +32,7 @@ bun run --filter api-service dev
 | `CLUSTER`, `ENV`, `JOB` | `local`, `main`, `consulagentonionoo` | labels selecting the relay metrics series |
 | `FROM`, `TO`, `INTERVAL` | `-7d`, `now`, `6h` | default range and step of the metrics range routes |
 | `HEXAGON_RESOLUTION` | `4` | H3 resolution of the relay map cells, 0 to 15 |
-| `GEO_IP_SERVICE_URL` | | base URL of geo-ip-service |
-| `GEO_IP_SERVICE_URL_FILE` | | file holding the base URL of geo-ip-service, read again for every lookup request; set this or `GEO_IP_SERVICE_URL` |
+| `GEO_IP_SERVICE_URL` | required | base URL of geo-ip-service |
 | `GEO_IP_CACHE_TTL` | `1h` | age after which a cached location is asked for again |
 | `HB_URL` | required | HyperBEAM node the operator registry is read from |
 | `OPERATOR_REGISTRY_PROCESS_ID` | required | operator registry process |
@@ -43,7 +42,7 @@ bun run --filter api-service dev
 | `UNS_DOMAINS_CACHE_TTL_SECONDS` | `30` | how long the domain list is served from memory |
 | `PORT`, `LOG_LEVEL` | | see [service-kit](../../packages/service-kit/#environment) |
 
-The Nomad jobs set `GEO_IP_SERVICE_URL` from Consul, as [operations](../../operations/#reaching-it-from-another-job) describes. With `GEO_IP_SERVICE_URL_FILE`, a missing or empty file counts as geo-ip-service being unavailable.
+The Nomad jobs set `GEO_IP_SERVICE_URL` from Consul, as [operations](../../operations/#reaching-it-from-another-job) describes.
 
 ## API
 

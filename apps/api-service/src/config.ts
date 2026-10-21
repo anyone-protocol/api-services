@@ -1,4 +1,3 @@
-import { type BaseUrl, urlFromFile } from '@anyone-protocol/geo-ip-client';
 import { commonEnv, type Environment, env, parseEnv } from '@anyone-protocol/service-kit';
 
 const MAX_H3_RESOLUTION = 15;
@@ -17,8 +16,7 @@ export const apiServiceEnv = {
   TO: env.string({ default: 'now' }),
   INTERVAL: env.string({ default: '6h' }),
   HEXAGON_RESOLUTION: env.integer({ default: 4 }),
-  GEO_IP_SERVICE_URL: env.url({ optional: true }),
-  GEO_IP_SERVICE_URL_FILE: env.string({ optional: true }),
+  GEO_IP_SERVICE_URL: env.url(),
   GEO_IP_CACHE_TTL: env.durationMs({ default: 60 * 60 * 1000 }),
   HB_URL: env.url(),
   OPERATOR_REGISTRY_PROCESS_ID: env.string(),
@@ -36,7 +34,6 @@ export type ApiServiceConfig = ReturnType<typeof loadConfig>;
 export function loadConfig(source: Environment = process.env) {
   const config = parseEnv(apiServiceEnv, source);
   const problems = [
-    (config.GEO_IP_SERVICE_URL === undefined) === (config.GEO_IP_SERVICE_URL_FILE === undefined) && 'exactly one of GEO_IP_SERVICE_URL and GEO_IP_SERVICE_URL_FILE is required',
     (config.HEXAGON_RESOLUTION < 0 || config.HEXAGON_RESOLUTION > MAX_H3_RESOLUTION) && `HEXAGON_RESOLUTION must be from 0 to ${MAX_H3_RESOLUTION}`,
     config.ONIONOO_DETAILS_TIMEOUT_SECONDS <= 0 && 'ONIONOO_DETAILS_TIMEOUT_SECONDS must be greater than 0',
     ...(['ONIONOO_DETAILS_CACHE_TTL_SECONDS', 'OPERATOR_REGISTRY_CACHE_TTL_SECONDS', 'UNS_DOMAINS_CACHE_TTL_SECONDS'] as const).map(
@@ -47,6 +44,5 @@ export function loadConfig(source: Environment = process.env) {
   if (problems.length > 0) {
     throw new Error(`Invalid environment: ${problems.join('; ')}`);
   }
-  const geoIpServiceUrl: BaseUrl = config.GEO_IP_SERVICE_URL_FILE ? urlFromFile(config.GEO_IP_SERVICE_URL_FILE) : String(config.GEO_IP_SERVICE_URL);
-  return { ...config, geoIpServiceUrl };
+  return config;
 }

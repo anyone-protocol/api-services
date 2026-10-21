@@ -17,10 +17,8 @@ export interface WarningLogger {
   warn(message: string, fields?: Record<string, unknown>): void;
 }
 
-export type BaseUrl = string | (() => string | undefined);
-
 export interface GeoIpClientOptions {
-  baseUrl: BaseUrl;
+  baseUrl: string;
   h3Resolution?: number;
   cacheTtlMs?: number;
   maxCacheEntries?: number;
@@ -44,25 +42,13 @@ interface CacheEntry {
   fetchedAt: number;
 }
 
-function lookupUrlFrom(baseUrl: BaseUrl): () => URL {
-  if (typeof baseUrl === 'string') {
-    const url = new URL(BATCH_LOOKUP_PATH, baseUrl);
-    return () => url;
-  }
-  return () => {
-    const current = baseUrl();
-    if (!current) throw new Error('geo-ip-service address is not known');
-    return new URL(BATCH_LOOKUP_PATH, current);
-  };
-}
-
 function isoOrNull(time: number | undefined): string | null {
   return time === undefined ? null : new Date(time).toISOString();
 }
 
 export class GeoIpClient {
   readonly #cache = new Map<string, CacheEntry>();
-  readonly #lookupUrl: () => URL;
+  readonly #lookupUrl: URL;
   readonly #h3Resolution: number | undefined;
   readonly #settings: typeof GEO_IP_CLIENT_DEFAULTS;
   readonly #logger: WarningLogger | undefined;
@@ -73,7 +59,7 @@ export class GeoIpClient {
   #lastError: string | undefined;
 
   constructor(options: GeoIpClientOptions) {
-    this.#lookupUrl = lookupUrlFrom(options.baseUrl);
+    this.#lookupUrl = new URL(BATCH_LOOKUP_PATH, options.baseUrl);
     this.#h3Resolution = options.h3Resolution;
     this.#settings = {
       cacheTtlMs: options.cacheTtlMs ?? GEO_IP_CLIENT_DEFAULTS.cacheTtlMs,
@@ -145,7 +131,7 @@ export class GeoIpClient {
 
   async #request(addresses: string[]): Promise<BatchLookupItem[]> {
     const request: BatchLookupRequest = { addresses, h3Resolution: this.#h3Resolution };
-    const response = await fetch(this.#lookupUrl(), {
+    const response = await fetch(this.#lookupUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(request),
