@@ -43,7 +43,7 @@ bun run --filter api-service dev
 | `UNS_DOMAINS_CACHE_TTL_SECONDS` | `30` | how long the domain list is served from memory |
 | `PORT`, `LOG_LEVEL` | | see [service-kit](../../packages/service-kit/#environment) |
 
-`GEO_IP_SERVICE_URL_FILE` is the form for Nomad: a template renders the address of geo-ip-service into the file without restarting the task, as [operations](../../operations/#reaching-it-from-another-job) describes. A missing or empty file counts as geo-ip-service being unavailable.
+The Nomad jobs set `GEO_IP_SERVICE_URL` from Consul, as [operations](../../operations/#reaching-it-from-another-job) describes. With `GEO_IP_SERVICE_URL_FILE`, a missing or empty file counts as geo-ip-service being unavailable.
 
 ## API
 

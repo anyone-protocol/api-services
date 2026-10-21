@@ -74,15 +74,14 @@ job "api-service-stage" {
       }
 
       env {
-        ONIONOO_PROTOCOL        = "http://"
-        CLUSTER                 = "local"
-        ENV                     = "main"
-        JOB                     = "consulagentonionoo"
-        HEXAGON_RESOLUTION      = "4"
-        HB_URL                  = "https://hb-stage.anyone.tech"
-        DB_NAME                 = "uns_indexer"
-        GEO_IP_SERVICE_URL_FILE = "/local/geo-ip-service-url"
-        LOG_LEVEL               = "info"
+        ONIONOO_PROTOCOL   = "http://"
+        CLUSTER            = "local"
+        ENV                = "main"
+        JOB                = "consulagentonionoo"
+        HEXAGON_RESOLUTION = "4"
+        HB_URL             = "https://hb-stage.anyone.tech"
+        DB_NAME            = "uns_indexer"
+        LOG_LEVEL          = "info"
       }
 
       consul {}
@@ -100,6 +99,9 @@ job "api-service-stage" {
         DB_HOST="{{ .Address }}"
         DB_PORT="{{ .Port }}"
         {{- end }}
+        {{- range service "geo-ip-service-stage|any" }}
+        GEO_IP_SERVICE_URL="http://{{ .Address }}:{{ .Port }}"
+        {{- end }}
         EOH
         destination = "local/config.env"
         env         = true
@@ -107,18 +109,6 @@ job "api-service-stage" {
           min = "30s"
           max = "90s"
         }
-      }
-
-      template {
-        data        = <<-EOH
-        {{- $url := "" -}}
-        {{- range service "geo-ip-service-stage|any" -}}
-          {{- if or (eq $url "") (eq .Status "passing") }}{{ $url = printf "http://%s:%d" .Address .Port }}{{ end -}}
-        {{- end -}}
-        {{ $url }}
-        EOH
-        destination = "local/geo-ip-service-url"
-        change_mode = "noop"
       }
 
       vault { role = "any1-nomad-workloads-controller" }

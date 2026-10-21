@@ -47,12 +47,12 @@ for (const [address, result] of results) {
 
 `baseUrl` can be a function, which the client calls before every request, so the address can change while the client and its cache live on. A function that returns `undefined` or an empty string counts as a failed request, without contacting anything.
 
-`urlFromFile(path)` returns such a function. It reads the file on every call and returns its trimmed contents, or `undefined` while the file is missing or blank. This fits a Nomad template that renders the address of `geo-ip-service` into a file without restarting the task, as [operations](../../operations/#reaching-it-from-another-job) describes:
+`urlFromFile(path)` returns such a function. It reads the file on every call and returns its trimmed contents, or `undefined` while the file is missing or blank:
 
 ```ts
 import { GeoIpClient, urlFromFile } from '@anyone-protocol/geo-ip-client';
 
-const geo = new GeoIpClient({ baseUrl: urlFromFile('/local/geo-ip-service-url'), logger });
+const geo = new GeoIpClient({ baseUrl: urlFromFile('geo-ip-service-url'), logger });
 ```
 
 ## Cache and failure behavior
