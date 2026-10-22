@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: docker
+    directories:
+      - /apps/api-service
+      - /apps/geo-ip-service
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
