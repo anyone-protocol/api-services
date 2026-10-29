@@ -6,6 +6,7 @@ Bun monorepo for Anyone Protocol API services. Each service under `apps/` builds
 | ------- | ------- |
 | [apps/geo-ip-service](apps/geo-ip-service/) | Internal IP address geolocation lookups |
 | [apps/api-service](apps/api-service/) | Public HTTP API |
+| [apps/hyperbeam-gateway](apps/hyperbeam-gateway/) | Public entry point to the protocol processes on HyperBEAM: relays allowed reads and validated, signed operator and admin messages |
 
 | Package | Purpose |
 | ------- | ------- |
