@@ -8,6 +8,8 @@ Nomad job definitions for running the services on the Anyone cluster. Deployment
 | [geo-ip-service-live.hcl](geo-ip-service-live.hcl) | geo-ip-service in `live-services`, on the `live-services` pool |
 | [api-service-stage.hcl](api-service-stage.hcl) | api-service behind Varnish in `stage-services`, on the `stage` pool |
 | [api-service-live.hcl](api-service-live.hcl) | api-service behind Varnish in `live-services`, on the `live-services` pool |
+| [hyperbeam-gateway-stage.hcl](hyperbeam-gateway-stage.hcl) | hyperbeam-gateway in `stage-services`, on the `stage` pool |
+| [hyperbeam-gateway-live.hcl](hyperbeam-gateway-live.hcl) | hyperbeam-gateway in `live-services`, on the `live-services` pool |
 
 ## Choosing a commit
 
@@ -136,4 +138,58 @@ Varnish:
 
 ```sh
 nomad job run -var commit_sha=<sha> operations/api-service-stage.hcl
+```
+
+## hyperbeam-gateway
+
+What the job sets up, per environment:
+
+- One allocation on the environment's services pool. A deploy stops the running allocation before starting the new one, so only one instance writes the message record at a time, and reverts if the new one does not become healthy.
+- The Consul service `hyperbeam-gateway-<env>` on a dynamic port on the `wireguard` host network, mapped to the service's port 3000, with the Traefik tags that publish it as `hb-stage.anyone.tech` on stage and `hb.anyone.tech` on live. Traefik limits each client address to 30 requests a second on average with bursts of 60, and refuses bodies over 1 MB, the service's own `MAX_BODY_BYTES`.
+- An HTTP check on `/healthz` sent to the allocation's own address. The service reports healthy while it runs, whether or not the node answers.
+- The host volume `hyperbeam-gateway-<env>` at `/data`, holding the [message record](../apps/hyperbeam-gateway/#message-record) at `/data/messages.sqlite` between restarts and deploys. The task runs as the image's `bun` user, uid 1000.
+- The node's address from the Consul service `hyperbeam-<env>-node`, and the three process ids from the Consul keys `smart-contracts/<env>/operator-registry-address`, `relay-rewards-address` and `staking-rewards-address`. A change to either re-renders the environment and restarts the task.
+- No admin actions. Setting `ADMIN_ACTIONS` and `ADMIN_SIGNERS` in the job's `env` turns them on, as the [service README](../apps/hyperbeam-gateway/#admin-actions) describes.
+
+The service holds no keys and needs nothing from Vault.
+
+### Before the first deploy
+
+Once per environment, on the client in the environment's services pool, create the host volume owned by uid 1000 so the service can write to it:
+
+```sh
+sudo mkdir -p /opt/volumes/hyperbeam-gateway-stage
+sudo chown 1000:1000 /opt/volumes/hyperbeam-gateway-stage
+```
+
+Register it in the `client` block of `/etc/nomad.d/nomad.hcl`, restart the Nomad agent, and check that `nomad node status -verbose <node>` lists it:
+
+```hcl
+host_volume "hyperbeam-gateway-stage" {
+  path      = "/opt/volumes/hyperbeam-gateway-stage"
+  read_only = false
+}
+```
+
+The node's own job must not carry a Traefik router for the same hostname.
+
+### Deploying
+
+```sh
+nomad job run -var commit_sha=<sha> operations/hyperbeam-gateway-stage.hcl
+```
+
+### Checks after a deploy
+
+From the gateway's allocation, the node answers on the address in its environment:
+
+```sh
+nomad alloc exec -namespace stage-services -task hyperbeam-gateway-stage-task <allocation> bun -e 'console.log(await (await fetch(process.env.HB_URL + "/~meta@1.0/info/address")).text())'
+```
+
+From outside, a view answers through the public hostname and an unlisted path does not:
+
+```sh
+curl -s "https://hb-stage.anyone.tech/<operator-registry process>~process@1.0/as/version"
+curl -s -o /dev/null -w '%{http_code}\n' "https://hb-stage.anyone.tech/~meta@1.0/info"   # 404
 ```
