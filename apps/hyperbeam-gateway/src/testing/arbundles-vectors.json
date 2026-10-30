@@ -1,0 +1,103 @@
+{
+  "privateKey": "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+  "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "target": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+  "items": [
+    {
+      "name": "submit",
+      "raw": "AwAgV/ZkuuV62qYi/e0B8GQI6oKZjcGB9dbCvWHa6dE5eH1+mFG4JlkGersaDfNsYTG5clz6x1gZWmgerwG8m4c7HASDGFNbVBBdSnquYMCPxF+WhxgbT9/GJb0adT+nOX/tdTVH8RyoaWZG8vOssI4xAWr6wj5jDF0R9Z9h/vV7DSqlAQcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAAcAAAAAAAAA1gAAAAAAAAAOCHR5cGUOTWVzc2FnZRpkYXRhLXByb3RvY29sBGFvDnZhcmlhbnQMYW8uTi4xGnJlcXVpcmUtY29kZWMgYXBwbGljYXRpb24vanNvbgxhY3Rpb248U3VibWl0LUZpbmdlcnByaW50LUNlcnRpZmljYXRlLmZpbmdlcnByaW50LWNlcnRpZmljYXRlUEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUEYdWktY2FjaGUta2V5JmNsYWltLTE3NjE2MDAwMDAwMDAA",
+      "id": "SEgR3sfbvDOY8YssqBF4d_-BSzGPh6vBp8UJ9budJSQ",
+      "owner": "BIMYU1tUEF1Keq5gwI_EX5aHGBtP38YlvRp1P6c5f-11NUfxHKhpZkby86ywjjEBavrCPmMMXRH1n2H-9XsNKqU",
+      "tags": [
+        {
+          "name": "type",
+          "value": "Message"
+        },
+        {
+          "name": "data-protocol",
+          "value": "ao"
+        },
+        {
+          "name": "variant",
+          "value": "ao.N.1"
+        },
+        {
+          "name": "require-codec",
+          "value": "application/json"
+        },
+        {
+          "name": "action",
+          "value": "Submit-Fingerprint-Certificate"
+        },
+        {
+          "name": "fingerprint-certificate",
+          "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "name": "ui-cache-key",
+          "value": "claim-1761600000000"
+        }
+      ],
+      "data": ""
+    },
+    {
+      "name": "set-share",
+      "raw": "AwC33MMPBcK6dYRfLGfm8amb4EMxcCvd6dbOQxUdtr78XS9zzB603AT1xxifzvrb0Ht8Sxd9VCXVr1rzoGlI9i4mHASDGFNbVBBdSnquYMCPxF+WhxgbT9/GJb0adT+nOX/tdTVH8RyoaWZG8vOssI4xAWr6wj5jDF0R9Z9h/vV7DSqlAQcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAAUAAAAAAAAAXwAAAAAAAAAKCHR5cGUOTWVzc2FnZRpkYXRhLXByb3RvY29sBGFvDnZhcmlhbnQMYW8uTi4xGnJlcXVpcmUtY29kZWMgYXBwbGljYXRpb24vanNvbgxhY3Rpb24SU2V0LVNoYXJlAHsiU2hhcmUiOjAuMX0=",
+      "id": "co7TROMTtcNdcchfyLR5FDsRC63HwphG5HYjhtm6lyo",
+      "owner": "BIMYU1tUEF1Keq5gwI_EX5aHGBtP38YlvRp1P6c5f-11NUfxHKhpZkby86ywjjEBavrCPmMMXRH1n2H-9XsNKqU",
+      "tags": [
+        {
+          "name": "type",
+          "value": "Message"
+        },
+        {
+          "name": "data-protocol",
+          "value": "ao"
+        },
+        {
+          "name": "variant",
+          "value": "ao.N.1"
+        },
+        {
+          "name": "require-codec",
+          "value": "application/json"
+        },
+        {
+          "name": "action",
+          "value": "Set-Share"
+        }
+      ],
+      "data": "{\"Share\":0.1}"
+    },
+    {
+      "name": "anchored",
+      "raw": "AwCU8Q7M0dvUSQ0/otoMjELuOLNSIy4Y6L57EtId7KimMwD1h7SfLV46TZLuLJ+HNRYagHS5xDDL6bUDCSMwGCqsHASDGFNbVBBdSnquYMCPxF+WhxgbT9/GJb0adT+nOX/tdTVH8RyoaWZG8vOssI4xAWr6wj5jDF0R9Z9h/vV7DSqlAQcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAWFuY2hvci1hbmNob3ItYW5jaG9yLWFuY2hvci0wMDAxBQAAAAAAAABiAAAAAAAAAAoIdHlwZQ5NZXNzYWdlGmRhdGEtcHJvdG9jb2wEYW8OdmFyaWFudAxhby5OLjEacmVxdWlyZS1jb2RlYyBhcHBsaWNhdGlvbi9qc29uDGFjdGlvbhhTZXQtRGVsZWdhdGUA",
+      "id": "1VS6kuKthVa2UKB_netPNx9pHm-CAxAt_kxce9zttHU",
+      "owner": "BIMYU1tUEF1Keq5gwI_EX5aHGBtP38YlvRp1P6c5f-11NUfxHKhpZkby86ywjjEBavrCPmMMXRH1n2H-9XsNKqU",
+      "tags": [
+        {
+          "name": "type",
+          "value": "Message"
+        },
+        {
+          "name": "data-protocol",
+          "value": "ao"
+        },
+        {
+          "name": "variant",
+          "value": "ao.N.1"
+        },
+        {
+          "name": "require-codec",
+          "value": "application/json"
+        },
+        {
+          "name": "action",
+          "value": "Set-Delegate"
+        }
+      ],
+      "data": "",
+      "anchor": "anchor-anchor-anchor-anchor-0001"
+    }
+  ]
+}
