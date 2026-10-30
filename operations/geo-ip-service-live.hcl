@@ -1,7 +1,7 @@
 variable "commit_sha" {
   type        = string
   description = "Commit whose geo-ip-service image to run"
-  default     = "19b7ae94b61e752f72ad0458cc7224075846aa37"
+  default     = "d63ea9e0093913b3e59a57dbe0da540f07f71ec0"
 }
 
 job "geo-ip-service-live" {

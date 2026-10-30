@@ -1,7 +1,7 @@
 variable "commit_sha" {
   type        = string
   description = "Commit whose api-service image to run"
-  default     = "19b7ae94b61e752f72ad0458cc7224075846aa37"
+  default     = "03ad69ea9967b83fa17443e7e3bd7414f453a7ed"
 }
 
 job "api-service-stage" {
