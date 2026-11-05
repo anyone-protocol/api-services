@@ -1,0 +1,14 @@
+{
+  "name": "hyperbeam-gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "start": "bun src/main.ts"
+  },
+  "dependencies": {
+    "@anyone-protocol/service-kit": "workspace:*",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0"
+  }
+}
