@@ -6,6 +6,7 @@ import type { MessageStore } from './store';
 type ParamRule = (value: string) => boolean;
 
 const MAX_FINGERPRINT_IDS = 100;
+const DUPLICATE_OUTPUT = /^error:\s*duplicate message \(slot (\d{1,15})\)$/;
 
 const address: ParamRule = isAddress;
 const fingerprint: ParamRule = (value) => FINGERPRINT.test(value);
@@ -102,7 +103,10 @@ export class ReadHandler {
 
   async slotOutput(processId: string, slot: string): Promise<ReadResult> {
     if (!this.options.store.hasSlot(processId, slot)) return { kind: 'refused', status: 404, reason: 'only results of messages sent through this gateway are available' };
-    return { kind: 'answered', response: await this.options.node.get(processId, `compute&slot=${slot}/results/output/data`) };
+    const response = await this.options.node.get(processId, `compute&slot=${slot}/results/output/data`);
+    const first = response.status === 200 ? DUPLICATE_OUTPUT.exec(response.body.trim())?.[1] : undefined;
+    if (first !== undefined && Number(first) < Number(slot)) this.options.store.recordFirstSlot(processId, first);
+    return { kind: 'answered', response };
   }
 
   private cached(key: string, load: () => Promise<NodeResponse>): Promise<NodeResponse> {

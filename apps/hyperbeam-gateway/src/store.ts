@@ -44,6 +44,13 @@ export class MessageStore {
       )
     `);
     this.database.run('CREATE INDEX IF NOT EXISTS accepted_slot ON accepted (process_id, slot)');
+    this.database.run(`
+      CREATE TABLE IF NOT EXISTS first_slots (
+        process_id TEXT NOT NULL,
+        slot TEXT NOT NULL,
+        PRIMARY KEY (process_id, slot)
+      )
+    `);
   }
 
   find(id: string): AcceptedMessage | undefined {
@@ -72,8 +79,19 @@ export class MessageStore {
       .run({ ...message });
   }
 
+  recordFirstSlot(processId: string, slot: string): void {
+    this.database.query('INSERT OR IGNORE INTO first_slots (process_id, slot) VALUES ($processId, $slot)').run({ processId, slot });
+  }
+
   hasSlot(processId: string, slot: string): boolean {
-    return this.database.query('SELECT 1 FROM accepted WHERE process_id = $processId AND slot = $slot').get({ processId, slot }) !== null;
+    return (
+      this.database
+        .query(
+          `SELECT 1 FROM accepted WHERE process_id = $processId AND slot = $slot
+           UNION ALL SELECT 1 FROM first_slots WHERE process_id = $processId AND slot = $slot`,
+        )
+        .get({ processId, slot }) !== null
+    );
   }
 
   close(): void {

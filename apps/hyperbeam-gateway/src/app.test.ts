@@ -216,6 +216,15 @@ describe('repeated messages', () => {
     expect(node.pushes()).toHaveLength(1);
   });
 
+  it('answers a repeat that arrives while the first is still being forwarded', async () => {
+    const handler = gateway();
+    const body = message(operator, RELAY_REWARDS, 'Set-Delegate');
+    const [first, second] = await Promise.all([push(handler, RELAY_REWARDS, body), push(handler, RELAY_REWARDS, body)]);
+    expect([first.status, second.status]).toEqual([200, 200]);
+    expect(second.headers.get('slot')).toBe(first.headers.get('slot'));
+    expect(node.pushes()).toHaveLength(1);
+  });
+
   it('records only messages the node accepted', async () => {
     const handler = gateway();
     const body = message(operator, RELAY_REWARDS, 'Set-Delegate');
@@ -318,6 +327,27 @@ describe('reads', () => {
     const output = await get(handler, `/${RELAY_REWARDS}~process@1.0/compute&slot=1/results/output/data`);
     expect(output.status).toBe(200);
     expect(await output.text()).toBe('OK');
+  });
+
+  it('serves the slot where a repeated message first ran', async () => {
+    const handler = gateway();
+    await fetch(`${node.url}/${RELAY_REWARDS}~process@1.0/push`, { method: 'POST', body: new Uint8Array() });
+    node.views.set(`${RELAY_REWARDS}/compute&slot=2/results/output/data`, { status: 200, body: 'error: duplicate message (slot 1)' });
+    await push(handler, RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate'));
+    const firstSlot = `/${RELAY_REWARDS}~process@1.0/compute&slot=1/results/output/data`;
+    expect((await get(handler, firstSlot)).status).toBe(404);
+    expect(await (await get(handler, `/${RELAY_REWARDS}~process@1.0/compute&slot=2/results/output/data`)).text()).toBe('error: duplicate message (slot 1)');
+    const output = await get(handler, firstSlot);
+    expect(output.status).toBe(200);
+    expect(await output.text()).toBe('OK');
+  });
+
+  it('serves only an earlier slot named by a duplicate output', async () => {
+    const handler = gateway();
+    node.views.set(`${RELAY_REWARDS}/compute&slot=1/results/output/data`, { status: 200, body: 'error: duplicate message (slot 7)' });
+    await push(handler, RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate'));
+    await get(handler, `/${RELAY_REWARDS}~process@1.0/compute&slot=1/results/output/data`);
+    expect((await get(handler, `/${RELAY_REWARDS}~process@1.0/compute&slot=7/results/output/data`)).status).toBe(404);
   });
 
   it('answers nothing outside the process routes', async () => {

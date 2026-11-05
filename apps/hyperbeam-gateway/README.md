@@ -10,7 +10,7 @@ The routes are the node's own paths, so a client written against the gateway als
 | ------ | ---- | ------ |
 | `GET` | `/<process>~process@1.0/as/<view>` | a view listed under [Views](#views), with only that view's parameters |
 | `POST` | `/<process>~process@1.0/push` | a signed message listed under [Messages](#messages) |
-| `GET` | `/<process>~process@1.0/compute&slot=<slot>/results/output/data` | the result of a message this gateway sent; other slots answer `404` |
+| `GET` | `/<process>~process@1.0/compute&slot=<slot>/results/output/data` | the result of a message this gateway sent, or of the earlier slot where that message first ran; other slots answer `404` |
 | `GET` | `/healthz` | health report |
 
 `<process>` is one of the three configured process ids. Every other path answers `404`. Responses allow any origin and expose the `slot` header, so the dashboard can call the gateway from the browser.
@@ -75,9 +75,11 @@ Available only when listed in `ADMIN_ACTIONS`, as `<process>:<action>`, and only
 
 ## Message record
 
-The gateway records every message the node accepted in a SQLite file at `MESSAGE_STORE_PATH`: id, process, action, signer, slot and the node's answer. A message takes effect once: sending the same message again is answered from the record and does not reach the node. Because signing is deterministic, a client that retries a message gets the same id and the original answer.
+The gateway records every message the node accepted in a SQLite file at `MESSAGE_STORE_PATH`: id, process, action, signer, slot and the node's answer. A message takes effect once: sending the same message again is answered from the record and does not reach the node. A copy that arrives while the first is still being sent waits for it and gets the same answer. A client that retries a message resends the same signed bytes, so the retry has the same id and gets the original answer.
 
-The record must survive restarts and moves of the service. Messages accepted before a lost record are no longer recognised as repeats.
+If the node's answer to a message was lost, the message is not in the record, and a retry reaches the node. The runtime does not run it again: the retry's slot answers `error: duplicate message (slot <n>)`, where `<n>` is the slot where it first ran. Once the gateway has served that answer, it also serves slot `<n>`.
+
+The record must survive restarts and moves of the service. Messages accepted before a lost record are no longer recognized as repeats.
 
 ## Running locally
 

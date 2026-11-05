@@ -78,7 +78,7 @@ export function responseSlot(response: Pick<NodeResponse, 'slot' | 'body'>): str
 }
 
 export class WriteHandler {
-  private readonly inFlight = new Set<string>();
+  private readonly inFlight = new Map<string, Promise<WriteResult>>();
   private readonly now: () => number;
 
   constructor(private readonly options: WriteOptions) {
@@ -104,11 +104,21 @@ export class WriteHandler {
       const repeat = this.options.store.find(item.id);
       if (repeat) return this.answered(repeat, true, item, signer, spec);
 
-      if (this.inFlight.has(item.id)) throw new Refusal(409, 'message is already being forwarded');
+      const pending = this.inFlight.get(item.id);
+      if (pending) {
+        const result = await pending;
+        const recorded = this.options.store.find(item.id);
+        return recorded ? this.answered(recorded, true, item, signer, spec) : result;
+      }
       if (!this.options.limiter.take(signer)) throw new Refusal(429, 'too many messages from this signer');
 
-      await this.authorize(spec, signer, tags);
-      return await this.forward(spec, processId, item, raw, signer);
+      const result = this.authorizeAndForward(spec, signer, tags, processId, item, raw);
+      this.inFlight.set(item.id, result);
+      try {
+        return await result;
+      } finally {
+        this.inFlight.delete(item.id);
+      }
     } catch (error) {
       const refusal = this.refusal(error);
       this.options.logger.info('message refused', { id: item?.id, signer, process, action: spec?.action, status: refusal.status, reason: refusal.reason });
@@ -138,27 +148,23 @@ export class WriteHandler {
     if (!holdsRole) throw new Refusal(403, `signer does not hold the admin or ${spec.action} role`);
   }
 
-  private async forward(spec: ActionSpec, processId: string, item: DataItem, raw: Uint8Array, signer: string): Promise<WriteResult> {
-    this.inFlight.add(item.id);
-    try {
-      const response = await this.options.node.push(processId, raw);
-      const slot = responseSlot(response);
-      const accepted: AcceptedMessage = {
-        id: item.id,
-        processId,
-        action: spec.action,
-        signer,
-        slot,
-        status: response.status,
-        body: response.body,
-        contentType: response.contentType,
-        acceptedAt: this.now(),
-      };
-      if (response.status >= 200 && response.status < 300) this.options.store.record(accepted);
-      return this.answered(accepted, false, item, signer, spec);
-    } finally {
-      this.inFlight.delete(item.id);
-    }
+  private async authorizeAndForward(spec: ActionSpec, signer: string, tags: ReadonlyMap<string, string>, processId: string, item: DataItem, raw: Uint8Array): Promise<WriteResult> {
+    await this.authorize(spec, signer, tags);
+    const response = await this.options.node.push(processId, raw);
+    const slot = responseSlot(response);
+    const accepted: AcceptedMessage = {
+      id: item.id,
+      processId,
+      action: spec.action,
+      signer,
+      slot,
+      status: response.status,
+      body: response.body,
+      contentType: response.contentType,
+      acceptedAt: this.now(),
+    };
+    if (response.status >= 200 && response.status < 300) this.options.store.record(accepted);
+    return this.answered(accepted, false, item, signer, spec);
   }
 
   private answered(message: AcceptedMessage, repeat: boolean, item: DataItem, signer: string, spec: ActionSpec): WriteResult {
