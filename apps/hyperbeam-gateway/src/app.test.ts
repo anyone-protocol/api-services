@@ -350,6 +350,14 @@ describe('reads', () => {
     expect((await get(handler, `/${RELAY_REWARDS}~process@1.0/compute&slot=7/results/output/data`)).status).toBe(404);
   });
 
+  it('ignores a duplicate output whose slot has leading zeros', async () => {
+    const handler = gateway();
+    node.views.set(`${RELAY_REWARDS}/compute&slot=1/results/output/data`, { status: 200, body: 'error: duplicate message (slot 00)' });
+    await push(handler, RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate'));
+    await get(handler, `/${RELAY_REWARDS}~process@1.0/compute&slot=1/results/output/data`);
+    expect((await get(handler, `/${RELAY_REWARDS}~process@1.0/compute&slot=00/results/output/data`)).status).toBe(404);
+  });
+
   it('answers nothing outside the process routes', async () => {
     const handler = gateway();
     for (const path of ['/', '/~meta@1.0/info', `/${OPERATOR_REGISTRY}%7Eprocess@1.0/as/status`, `//${OPERATOR_REGISTRY}~process@1.0/as/status`, `/${Buffer.alloc(32, 9).toString('base64url')}~process@1.0/as/status`, `/${OPERATOR_REGISTRY}~process@1.0/now/status`, `/${OPERATOR_REGISTRY}~process@1.0/as/status/~meta@1.0/info`]) {

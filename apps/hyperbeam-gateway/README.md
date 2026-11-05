@@ -33,11 +33,11 @@ Successful view answers are cached for `VIEW_CACHE_TTL`. Errors are not cached.
 A message is a raw ANS-104 data item sent with `content-type: application/ans104`, the format `@anyone-protocol/ao-client` produces. The gateway checks it in this order and stops at the first failure:
 
 1. The body is at most `MAX_BODY_BYTES` and parses as an ANS-104 data item with an Ethereum signature (type 3).
-2. The signature verifies, is in low-s form, and was made by the item's owner. The signer is the owner's checksummed address.
+2. The signature verifies, is in low-s form with a recovery byte of 27 or 28, and was made by the item's owner. The signer is the owner's checksummed address.
 3. The item targets the process named in the path.
 4. The `action` tag names an action listed below for that process. Every other action answers `403`, including `Add-Scores`, `Complete-Round`, `Claim-Rewards` and `Eval`.
 5. The tags are exactly `type=Message`, `data-protocol=ao`, `variant=ao.N.1`, `action`, the action's own tags, and optionally `require-codec=application/json` and `ui-cache-key`. Tag names match in any case and may not repeat. The data has the shape the action takes.
-6. A message whose id the gateway has already sent and the node accepted is answered with the recorded answer and not sent again. See [Message record](#message-record).
+6. A message whose id the gateway has already sent and the node accepted, or is sending now, is answered with that answer and not sent again. See [Message record](#message-record).
 7. A signer may send `WRITES_PER_SIGNER_PER_MINUTE` messages a minute.
 8. The signer is allowed to send the action, see below.
 
@@ -75,7 +75,7 @@ Available only when listed in `ADMIN_ACTIONS`, as `<process>:<action>`, and only
 
 ## Message record
 
-The gateway records every message the node accepted in a SQLite file at `MESSAGE_STORE_PATH`: id, process, action, signer, slot and the node's answer. A message takes effect once: sending the same message again is answered from the record and does not reach the node. A copy that arrives while the first is still being sent waits for it and gets the same answer. A client that retries a message resends the same signed bytes, so the retry has the same id and gets the original answer.
+The gateway records every message the node accepted in a SQLite file at `MESSAGE_STORE_PATH`: id, process, action, signer, slot and the node's answer. A message takes effect once: sending the same message again is answered from the record and does not reach the node. A copy that arrives while the first is still being sent waits for it and gets the same answer. `@anyone-protocol/ao-client` resends the same signed bytes when it retries a message, so the retry has the same id and gets the original answer.
 
 If the node's answer to a message was lost, the message is not in the record, and a retry reaches the node. The runtime does not run it again: the retry's slot answers `error: duplicate message (slot <n>)`, where `<n>` is the slot where it first ran. Once the gateway has served that answer, it also serves slot `<n>`.
 

@@ -231,8 +231,8 @@ export function ownerAddress(owner: Uint8Array): string {
 
 export function verifySigner(item: DataItem): string {
   const recoveryByte = item.signature[64] ?? 0;
-  const recovery = recoveryByte >= 27 ? recoveryByte - 27 : recoveryByte;
-  if (recovery !== 0 && recovery !== 1) throw new InvalidDataItem('signature recovery byte is invalid');
+  if (recoveryByte !== 27 && recoveryByte !== 28) throw new InvalidDataItem('signature recovery byte is invalid');
+  const recovery = recoveryByte - 27;
 
   let publicKey: Uint8Array;
   try {

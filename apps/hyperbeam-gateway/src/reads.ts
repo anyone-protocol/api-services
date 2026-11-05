@@ -6,7 +6,7 @@ import type { MessageStore } from './store';
 type ParamRule = (value: string) => boolean;
 
 const MAX_FINGERPRINT_IDS = 100;
-const DUPLICATE_OUTPUT = /^error:\s*duplicate message \(slot (\d{1,15})\)$/;
+const DUPLICATE_OUTPUT = /^error:\s*duplicate message \(slot (0|[1-9]\d{0,14})\)$/;
 
 const address: ParamRule = isAddress;
 const fingerprint: ParamRule = (value) => FINGERPRINT.test(value);

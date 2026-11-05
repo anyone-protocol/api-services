@@ -76,6 +76,14 @@ describe('verifySigner', () => {
     expect(() => verifySigner(parseDataItem(swapped))).toThrow('signature does not match the owner');
   });
 
+  it('refuses a recovery byte other than 27 or 28', () => {
+    const signed = signItem(signer, item);
+    for (const recovery of [(signed[66] ?? 27) - 27, (signed[66] ?? 27) + 8]) {
+      const twin = serialize(Buffer.concat([signed.subarray(2, 66), Uint8Array.of(recovery)]), signer.owner, item);
+      expect(() => verifySigner(parseDataItem(twin))).toThrow('signature recovery byte is invalid');
+    }
+  });
+
   it('refuses the high-s twin of a valid signature', () => {
     const signed = signItem(signer, item);
     const signature = secp256k1.Signature.fromBytes(signed.subarray(2, 66), 'compact');
