@@ -79,7 +79,6 @@ job "api-service-stage" {
         ENV                = "main"
         JOB                = "consulagentonionoo"
         HEXAGON_RESOLUTION = "4"
-        HB_URL             = "https://hb-stage.anyone.tech"
         DB_NAME            = "uns_indexer"
         LOG_LEVEL          = "info"
       }
@@ -101,6 +100,9 @@ job "api-service-stage" {
         {{- end }}
         {{- range service "geo-ip-service-stage|any" }}
         GEO_IP_SERVICE_URL="http://{{ .Address }}:{{ .Port }}"
+        {{- end }}
+        {{- range service "hyperbeam-stage-node|any" }}
+        HB_URL="http://{{ .Address }}:{{ .Port }}"
         {{- end }}
         EOH
         destination = "local/config.env"
