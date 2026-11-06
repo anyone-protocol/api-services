@@ -85,6 +85,26 @@ job "hyperbeam-gateway-stage" {
       env {
         MESSAGE_STORE_PATH = "/data/messages.sqlite"
         LOG_LEVEL          = "info"
+        ADMIN_SIGNERS      = "0x38121cf84d897EF1ebE0d1804Ebf502f1E8D2Be0"
+        ADMIN_ACTIONS = join(",", [
+          "operator-registry:Admin-Submit-Operator-Certificates",
+          "operator-registry:Remove-Fingerprint-Certificate",
+          "operator-registry:Block-Operator-Address",
+          "operator-registry:Unblock-Operator-Address",
+          "operator-registry:Add-Registration-Credit",
+          "operator-registry:Remove-Registration-Credit",
+          "operator-registry:Add-Verified-Hardware",
+          "operator-registry:Remove-Verified-Hardware",
+          "operator-registry:Update-Roles",
+          "relay-rewards:Update-Configuration",
+          "relay-rewards:Cancel-Round",
+          "relay-rewards:Update-Roles",
+          "staking-rewards:Update-Configuration",
+          "staking-rewards:Update-Shares-Configuration",
+          "staking-rewards:Toggle-Feature-Shares",
+          "staking-rewards:Cancel-Round",
+          "staking-rewards:Update-Roles",
+        ])
       }
 
       consul {}

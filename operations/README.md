@@ -149,7 +149,7 @@ What the job sets up, per environment:
 - An HTTP check on `/healthz` sent to the allocation's own address. The service reports healthy while it runs, whether or not the node answers.
 - The host volume `hyperbeam-gateway-<env>` at `/data`, holding the [message record](../apps/hyperbeam-gateway/#message-record) at `/data/messages.sqlite` between restarts and deploys. The task runs as the image's `bun` user, uid 1000.
 - The node's address from the Consul service `hyperbeam-<env>-node`, and the three process ids from the Consul keys `smart-contracts/<env>/operator-registry-address`, `relay-rewards-address` and `staking-rewards-address`. A change to either re-renders the environment and restarts the task.
-- No admin actions. Setting `ADMIN_ACTIONS` and `ADMIN_SIGNERS` in the job's `env` turns them on, as the [service README](../apps/hyperbeam-gateway/#admin-actions) describes.
+- Admin actions, set by `ADMIN_ACTIONS` and `ADMIN_SIGNERS` in the job's `env`, as the [service README](../apps/hyperbeam-gateway/#admin-actions) describes. Stage accepts every admin action from the signers it lists. Live accepts none.
 
 The service holds no keys and needs nothing from Vault.
 
