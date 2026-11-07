@@ -2,7 +2,7 @@ import { GeoIpClient, type GeoLocation } from '@anyone-protocol/geo-ip-client';
 import { createLogger } from '@anyone-protocol/service-kit';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { cellToBoundary } from 'h3-js';
-import { startServer } from './app';
+import { type ServerOptions, startServer } from './app';
 import { Onionoo, type Relay } from './onionoo';
 import { OperatorRegistry } from './operator-registry';
 import { StubGeoIpService, StubUpstreams } from './testing/stubs';
@@ -83,7 +83,7 @@ let server: ReturnType<typeof startServer>;
 let clock: number;
 let domainRows: () => Promise<UnsTokenRow[]>;
 
-function serve() {
+function serve(options: Partial<ServerOptions> = {}) {
   const logger = createLogger({ service: 'api-service', write: () => {} });
   server = startServer({
     port: 0,
@@ -98,6 +98,7 @@ function serve() {
     operatorRegistry: new OperatorRegistry({ nodeUrl: upstreams.url, processId: PROCESS_ID, cacheTtlMs: 0, logger, read: { retryDelayMs: 1 } }),
     unsDomains: new UnsDomains({ rows: () => domainRows(), cacheTtlMs: 0, logger }),
     logger,
+    ...options,
   });
   return server;
 }
@@ -299,7 +300,22 @@ describe('when geo-ip-service is down', () => {
   });
 });
 
+describe('POST /hardware when the endpoint is off', () => {
+  it('answers 404 by default and does not call Onionoo', async () => {
+    const response = await post('/hardware', JSON.stringify({ fingerprint: 'A'.repeat(40) }));
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain('Cannot POST /hardware');
+    expect(upstreams.requests).toHaveLength(0);
+  });
+});
+
 describe('POST /hardware', () => {
+  beforeEach(async () => {
+    await server.stop(true);
+    serve({ hardwareEnabled: true });
+  });
+
   const hardwareInfo = {
     id: 'id',
     company: 'company',
