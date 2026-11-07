@@ -93,8 +93,12 @@ function asText(value: unknown): string {
   return String(value);
 }
 
+function hasAtecSerial(serNums: unknown): boolean {
+  return Array.isArray(serNums) && serNums.some((serNum) => isObjectLike(serNum) && serNum.type === 'ATEC' && typeof serNum.number === 'string' && serNum.number.length > 0);
+}
+
 export function validateHardwareInfo(body: unknown): FieldError[] {
-  return RULES.flatMap(([field, checks]) => {
+  const errors = RULES.flatMap(([field, checks]) => {
     const paths = expand(body, field.split('.'));
     return checks.flatMap(([test, msg]) =>
       paths.flatMap((path) => {
@@ -104,4 +108,9 @@ export function validateHardwareInfo(body: unknown): FieldError[] {
       }),
     );
   });
+  const serNums = valueAt(body, ['serNums']);
+  if (!hasAtecSerial(serNums)) {
+    errors.push({ type: 'field', value: serNums, msg: 'serNums should include an ATEC serial', path: 'serNums', location: 'body' });
+  }
+  return errors;
 }

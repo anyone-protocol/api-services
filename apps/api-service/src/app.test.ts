@@ -309,7 +309,7 @@ describe('POST /hardware', () => {
     nftid: '1',
     build: 'build',
     flags: 'flags',
-    serNums: [{ type: 'type', number: '1' }],
+    serNums: [{ type: 'ATEC', number: '1' }],
     pubKeys: [{ type: 'type', number: '1' }],
     certs: [{ type: 'type', signature: 'signature' }],
   };
@@ -334,6 +334,7 @@ describe('POST /hardware', () => {
         { type: 'field', value: 'xyz', msg: 'fingerprint must be a 40 character hexadecimal string', path: 'fingerprint', location: 'body' },
         { type: 'field', value: '', msg: 'serNums.*.type should not be empty', path: 'serNums[0].type', location: 'body' },
         { type: 'field', msg: 'serNums.*.number should not be empty', path: 'serNums[0].number', location: 'body' },
+        { type: 'field', value: [{ type: '' }], msg: 'serNums should include an ATEC serial', path: 'serNums', location: 'body' },
       ],
     });
     expect(upstreams.requests).toHaveLength(0);
@@ -343,7 +344,7 @@ describe('POST /hardware', () => {
     const response = await post('/hardware', JSON.stringify(hardwareInfo), 'text/plain');
 
     expect(response.status).toBe(400);
-    expect(((await response.json()) as { errors: unknown[] }).errors).toHaveLength(12);
+    expect(((await response.json()) as { errors: unknown[] }).errors).toHaveLength(13);
   });
 
   it.each(['{bad', '"text"'])('answers 400 without CORS to the malformed JSON %s', async (body) => {

@@ -54,7 +54,7 @@ The Nomad jobs set `GEO_IP_SERVICE_URL` from Consul, as [operations](../../opera
 | `GET /relays?fingerprints=<a>,<b>` | the same for every known relay in the list; `400` without fingerprints |
 | `GET /relay-map/` | H3 cells holding relays: `index`, `relayCount`, `geo` (cell center) and `boundary` |
 | `GET /fingerprint-map/` | per relay fingerprint: `hexId`, `coordinates` (cell center), country, region, city and autonomous system |
-| `POST /hardware` | validates hardware relay info and stores it in Onionoo; `400` with the list of validation errors |
+| `POST /hardware` | validates hardware relay info, which must include an `ATEC` entry in `serNums`, and stores it in Onionoo; `400` with the list of validation errors |
 | `GET /operators` | operator addresses; `?withDomains=true` adds the `.anyone` domains each one owns |
 | `GET /anyone-domains` | every `.anyone` domain with its token id and owner |
 | `GET /healthz` | service health, see [Health](#health) |

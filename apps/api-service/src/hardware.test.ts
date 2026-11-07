@@ -18,6 +18,7 @@ describe('validateHardwareInfo', () => {
       'serNums: serNums should not be empty',
       'pubKeys: ID should not be empty',
       'certs: certs should not be empty',
+      'serNums: serNums should include an ATEC serial',
     ]);
   });
 
@@ -32,14 +33,33 @@ describe('validateHardwareInfo', () => {
       { type: 'field', value: '', msg: 'serNums.*.type should not be empty', path: 'serNums[0].type', location: 'body' },
       { type: 'field', value: undefined, msg: 'serNums.*.type should not be empty', path: 'serNums[1].type', location: 'body' },
       { type: 'field', value: undefined, msg: 'serNums.*.type should not be empty', path: 'serNums[3].type', location: 'body' },
+      { type: 'field', value: [{ type: '' }, 'str', { type: 0 }, []], msg: 'serNums should include an ATEC serial', path: 'serNums', location: 'body' },
     ]);
   });
 
   it('accepts an empty array, numbers, booleans and objects as not empty', () => {
     const body = Object.fromEntries(FIELDS.map((field) => [field, { any: 'object' }]));
-    const errors = validateHardwareInfo({ ...body, id: 0, company: false, fingerprint: 'a'.repeat(40), serNums: [], pubKeys: [], certs: [] });
+    const errors = validateHardwareInfo({ ...body, id: 0, company: false, fingerprint: 'a'.repeat(40), serNums: [{ type: 'ATEC', number: '1' }], pubKeys: [], certs: [] });
 
     expect(errors).toEqual([]);
+  });
+
+  it.each([
+    ['no ATEC entry', [{ type: 'DEVICE', number: '1' }]],
+    ['a lower case type', [{ type: 'atec', number: '1' }]],
+    ['a number that is not text', [{ type: 'ATEC', number: 1 }]],
+    ['an empty number', [{ type: 'ATEC', number: '' }]],
+    ['an object instead of an array', { a: { type: 'ATEC', number: '1' } }],
+  ])('requires an ATEC serial in serNums, refusing %s', (_case, serNums) => {
+    expect(validateHardwareInfo({ serNums }).filter(({ msg }) => msg === 'serNums should include an ATEC serial')).toEqual([
+      { type: 'field', value: serNums, msg: 'serNums should include an ATEC serial', path: 'serNums', location: 'body' },
+    ]);
+  });
+
+  it('accepts an ATEC serial next to other serial numbers', () => {
+    const serNums = [{ type: 'DEVICE', number: '1' }, { type: 'ATEC', number: '2' }];
+
+    expect(validateHardwareInfo({ serNums }).filter(({ path }) => path.startsWith('serNums'))).toEqual([]);
   });
 
   it('names object keys with dots in brackets', () => {
