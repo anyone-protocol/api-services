@@ -44,6 +44,7 @@ const server = startServer({
   }),
   unsDomains: new UnsDomains({ rows: unsTokenRows(database), cacheTtlMs: config.UNS_DOMAINS_CACHE_TTL_SECONDS * SECOND_MS, logger }),
   logger,
+  hardwareEnabled: config.HARDWARE_ENDPOINT_ENABLED === 'true',
 });
 
 logger.info('Listening', {
@@ -51,6 +52,7 @@ logger.info('Listening', {
   onionoo: config.ONIONOO_INSTANCE,
   operatorRegistryProcessId: config.OPERATOR_REGISTRY_PROCESS_ID,
   geoIpService: config.GEO_IP_SERVICE_URL,
+  hardwareEndpointEnabled: config.HARDWARE_ENDPOINT_ENABLED === 'true',
 });
 
 handleShutdownSignals(

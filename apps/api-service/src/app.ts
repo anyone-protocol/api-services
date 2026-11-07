@@ -18,6 +18,7 @@ export interface ServerOptions {
   operatorRegistry: OperatorRegistry;
   unsDomains: UnsDomains;
   logger: Logger;
+  hardwareEnabled?: boolean;
 }
 
 type Handler = (request: BunRequest) => Response | Promise<Response>;
@@ -46,7 +47,7 @@ function withTrailingSlashes(routes: Routes): Routes {
   return Object.fromEntries(Object.entries(routes).flatMap(([path, methods]) => [[path, methods], [`${path}/`, methods]]));
 }
 
-export function startServer({ port, onionoo, relayMetrics, geo, hexagonResolution, operatorRegistry, unsDomains, logger }: ServerOptions) {
+export function startServer({ port, onionoo, relayMetrics, geo, hexagonResolution, operatorRegistry, unsDomains, logger, hardwareEnabled = false }: ServerOptions) {
   const health = createHealthReporter('api-service', { checks: { geoIp: () => geoIpCheck(geo) } });
 
   const answer =
@@ -107,17 +108,21 @@ export function startServer({ port, onionoo, relayMetrics, geo, hexagonResolutio
       }),
     },
 
-    '/hardware': {
-      POST: answer('Error posting hardware info', async (request) => {
-        const body = await readJsonBody(request);
-        if (body instanceof Response) return body;
+    ...(hardwareEnabled
+      ? {
+          '/hardware': {
+            POST: answer('Error posting hardware info', async (request) => {
+              const body = await readJsonBody(request);
+              if (body instanceof Response) return body;
 
-        const errors = validateHardwareInfo(body);
-        if (errors.length > 0) return json(request, { errors }, 400);
+              const errors = validateHardwareInfo(body);
+              if (errors.length > 0) return json(request, { errors }, 400);
 
-        return relayedText(request, await onionoo.updateHardwareInfo(body as HardwareInfo));
-      }),
-    },
+              return relayedText(request, await onionoo.updateHardwareInfo(body as HardwareInfo));
+            }),
+          },
+        }
+      : {}),
 
     '/operators': {
       GET: answer('Error querying operators', async (request) => {

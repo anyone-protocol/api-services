@@ -27,6 +27,7 @@ export const apiServiceEnv = {
   DB_PASS: env.secret(env.string({ optional: true })),
   DB_NAME: env.string(),
   UNS_DOMAINS_CACHE_TTL_SECONDS: env.integer({ default: 30 }),
+  HARDWARE_ENDPOINT_ENABLED: env.oneOf(['true', 'false'], { default: 'false' }),
 };
 
 export type ApiServiceConfig = ReturnType<typeof loadConfig>;

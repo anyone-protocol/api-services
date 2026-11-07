@@ -40,6 +40,7 @@ bun run --filter api-service dev
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_NAME` | `DB_PORT` `5432`, others required | UNS indexer Postgres database, read only |
 | `DB_PASS` | none | its password, handled as a [secret](../../packages/service-kit/#secrets) |
 | `UNS_DOMAINS_CACHE_TTL_SECONDS` | `30` | how long the domain list is served from memory |
+| `HARDWARE_ENDPOINT_ENABLED` | `false` | `true` serves `POST /hardware`; any value other than `true` or `false` stops the service at startup |
 | `PORT`, `LOG_LEVEL` | | see [service-kit](../../packages/service-kit/#environment) |
 
 The Nomad jobs set `GEO_IP_SERVICE_URL` from Consul, as [operations](../../operations/#reaching-it-from-another-job) describes.
@@ -54,7 +55,7 @@ The Nomad jobs set `GEO_IP_SERVICE_URL` from Consul, as [operations](../../opera
 | `GET /relays?fingerprints=<a>,<b>` | the same for every known relay in the list; `400` without fingerprints |
 | `GET /relay-map/` | H3 cells holding relays: `index`, `relayCount`, `geo` (cell center) and `boundary` |
 | `GET /fingerprint-map/` | per relay fingerprint: `hexId`, `coordinates` (cell center), country, region, city and autonomous system |
-| `POST /hardware` | validates hardware relay info, which must include an `ATEC` entry in `serNums`, and stores it in Onionoo; `400` with the list of validation errors |
+| `POST /hardware` | only with `HARDWARE_ENDPOINT_ENABLED=true`, otherwise the not found page: validates hardware relay info, which must include an `ATEC` entry in `serNums`, and stores it in Onionoo; `400` with the list of validation errors |
 | `GET /operators` | operator addresses; `?withDomains=true` adds the `.anyone` domains each one owns |
 | `GET /anyone-domains` | every `.anyone` domain with its token id and owner |
 | `GET /healthz` | service health, see [Health](#health) |

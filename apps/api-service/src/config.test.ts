@@ -30,7 +30,16 @@ describe('loadConfig', () => {
       OPERATOR_REGISTRY_CACHE_TTL_SECONDS: 0,
       DB_PORT: 5432,
       UNS_DOMAINS_CACHE_TTL_SECONDS: 30,
+      HARDWARE_ENDPOINT_ENABLED: 'false',
     });
+  });
+
+  it('turns the hardware endpoint on only for true', () => {
+    expect(loadConfig({ ...REQUIRED, HARDWARE_ENDPOINT_ENABLED: 'true' }).HARDWARE_ENDPOINT_ENABLED).toBe('true');
+  });
+
+  it.each(['yes', '1', 'TRUE', 'on'])('refuses HARDWARE_ENDPOINT_ENABLED=%s', (value) => {
+    expect(() => loadConfig({ ...REQUIRED, HARDWARE_ENDPOINT_ENABLED: value })).toThrow('HARDWARE_ENDPOINT_ENABLED must be one of true, false');
   });
 
   it.each(['HB_URL', 'OPERATOR_REGISTRY_PROCESS_ID', 'ONIONOO_INSTANCE', 'VICTORIA_METRICS_ADDRESS', 'GEO_IP_SERVICE_URL', 'DB_HOST'])('fails closed without %s', (name) => {
