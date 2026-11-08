@@ -27,6 +27,7 @@ const BASE_TAGS: Tag[] = [
 const logger = createLogger({ service: 'test', level: 'error', write: () => {} });
 const operator = testSigner();
 const stranger = randomSigner();
+const delegatee = randomSigner();
 
 let node: StubNode;
 let store: MessageStore;
@@ -36,6 +37,7 @@ interface BuildOptions {
   adminSigners?: string[];
   perMinute?: number;
   newSignersPerMinute?: number;
+  settingsPerHour?: number;
   operators?: OperatorDirectory;
 }
 
@@ -47,7 +49,7 @@ function directory() {
   return new OperatorDirectory({ node: hyperbeam(), processId: OPERATOR_REGISTRY, refreshMs: 60_000, logger });
 }
 
-function gateway({ adminActions = [], adminSigners = [], perMinute = 100, newSignersPerMinute = 100, operators = directory() }: BuildOptions = {}) {
+function gateway({ adminActions = [], adminSigners = [], perMinute = 100, newSignersPerMinute = 100, settingsPerHour = 100, operators = directory() }: BuildOptions = {}) {
   const hb = hyperbeam();
   const processes = new ProcessIds({ 'operator-registry': OPERATOR_REGISTRY, 'relay-rewards': RELAY_REWARDS, 'staking-rewards': STAKING_REWARDS });
   return createFetchHandler({
@@ -62,6 +64,7 @@ function gateway({ adminActions = [], adminSigners = [], perMinute = 100, newSig
       limiter: new RateLimiter({ perMinute }),
       operators,
       newSigners: new RateLimiter({ perMinute: newSignersPerMinute, burst: newSignersPerMinute }),
+      settings: new RateLimiter({ perMinute: settingsPerHour / 60, burst: settingsPerHour }),
       roles: new RolesCache(hb, 60_000),
       logger,
     }),
@@ -95,6 +98,8 @@ beforeEach(() => {
   node = new StubNode().start();
   store = new MessageStore(':memory:');
   node.operators.set(operator.address, { claimable: { [FINGERPRINT]: true }, verified: { [OTHER_FINGERPRINT]: true } });
+  node.views.set(`${RELAY_REWARDS}/as/delegate?address=${operator.address}`, { status: 200, body: JSON.stringify({ Address: delegatee.address, Share: 0.5 }) });
+  node.views.set(`${STAKING_REWARDS}/as/status`, { status: 200, body: JSON.stringify({ sharesEnabled: true, setSharesEnabled: true }) });
 });
 
 afterEach(() => {
@@ -146,7 +151,12 @@ describe('operator writes', () => {
 
   it('checks the operator against operator-registry for writes to the reward processes', async () => {
     await push(gateway(), STAKING_REWARDS, message(operator, STAKING_REWARDS, 'Set-Share', [], '{"Share":0.1}'));
-    expect(node.requests.map((request) => request.path)).toEqual([`/${OPERATOR_REGISTRY}~process@1.0/as/operator?address=${operator.address}`, `/${STAKING_REWARDS}~process@1.0/push`]);
+    expect(node.requests.map((request) => request.path)).toEqual([
+      `/${OPERATOR_REGISTRY}~process@1.0/as/operator?address=${operator.address}`,
+      `/${STAKING_REWARDS}~process@1.0/as/status`,
+      `/${STAKING_REWARDS}~process@1.0/as/shares?address=${operator.address}`,
+      `/${STAKING_REWARDS}~process@1.0/push`,
+    ]);
   });
 
   it('refuses a share that is not a number', async () => {
@@ -251,7 +261,10 @@ describe('repeated messages', () => {
   it('limits messages per signer', async () => {
     const handler = gateway({ perMinute: 1 });
     expect((await push(handler, RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate'))).status).toBe(200);
-    const second = message(operator, RELAY_REWARDS, 'Set-Delegate', [{ name: 'address', value: stranger.address }]);
+    const second = message(operator, RELAY_REWARDS, 'Set-Delegate', [
+      { name: 'address', value: stranger.address },
+      { name: 'share', value: '0.25' },
+    ]);
     expect(await refusal(await push(handler, RELAY_REWARDS, second))).toEqual([429, 'too many messages from this signer']);
   });
 
@@ -259,6 +272,73 @@ describe('repeated messages', () => {
     node.available = false;
     const body = message(operator, RELAY_REWARDS, 'Set-Delegate');
     expect((await push(gateway(), RELAY_REWARDS, body)).status).toBe(502);
+  });
+});
+
+describe('settings changes', () => {
+  const delegate = (address: string, share: string) => [
+    { name: 'address', value: address },
+    { name: 'share', value: share },
+  ];
+  const shares = (body: object) => node.views.set(`${STAKING_REWARDS}/as/shares?address=${operator.address}`, { status: 200, body: JSON.stringify(body) });
+  const setShare = (share: number) => message(operator, STAKING_REWARDS, 'Set-Share', [], JSON.stringify({ Share: share }));
+
+  it('refuses a delegate change to the current address and share', async () => {
+    const body = message(operator, RELAY_REWARDS, 'Set-Delegate', delegate(delegatee.address.toLowerCase(), '0.50'));
+    expect(await refusal(await push(gateway(), RELAY_REWARDS, body))).toEqual([409, 'the delegate is already set to that address and share']);
+    expect(node.pushes()).toHaveLength(0);
+  });
+
+  it('forwards a delegate change of share alone', async () => {
+    expect((await push(gateway(), RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate', delegate(delegatee.address, '0.4')))).status).toBe(200);
+  });
+
+  it('refuses a reset when the signer has no delegate', async () => {
+    node.views.set(`${RELAY_REWARDS}/as/delegate?address=${operator.address}`, { status: 200, body: JSON.stringify({ Address: '', Share: 0 }) });
+    expect(await refusal(await push(gateway(), RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate')))).toEqual([409, 'the signer has no delegate to reset']);
+    expect(node.pushes()).toHaveLength(0);
+  });
+
+  it('refuses an address without a share and a share without an address', async () => {
+    const reason = 'Set-Delegate takes an address and a share together, or neither to reset';
+    const handler = gateway();
+    expect(await refusal(await push(handler, RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate', [{ name: 'address', value: stranger.address }])))).toEqual([400, reason]);
+    expect(await refusal(await push(handler, RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate', [{ name: 'share', value: '0.5' }])))).toEqual([400, reason]);
+    expect(node.requests).toHaveLength(0);
+  });
+
+  it('refuses a share change while staking-rewards does not accept them', async () => {
+    node.views.set(`${STAKING_REWARDS}/as/status`, { status: 200, body: JSON.stringify({ sharesEnabled: true, setSharesEnabled: false }) });
+    expect(await refusal(await push(gateway(), STAKING_REWARDS, setShare(0.1)))).toEqual([403, 'staking-rewards does not accept share changes']);
+    expect(node.pushes()).toHaveLength(0);
+  });
+
+  it('refuses the share already set, or already pending', async () => {
+    const handler = gateway();
+    shares({ address: operator.address, share: 0.2 });
+    expect(await refusal(await push(handler, STAKING_REWARDS, setShare(0.2)))).toEqual([409, 'the share is already set to that value']);
+    shares({ address: operator.address, share: 0.2, pending: { Share: 0.3, RequestedTimestamp: 1 } });
+    expect(await refusal(await push(handler, STAKING_REWARDS, setShare(0.3)))).toEqual([409, 'the share is already set to that value']);
+    expect(node.pushes()).toHaveLength(0);
+  });
+
+  it('forwards the current share when another change is pending', async () => {
+    shares({ address: operator.address, share: 0.2, pending: { Share: 0.3, RequestedTimestamp: 1 } });
+    expect((await push(gateway(), STAKING_REWARDS, setShare(0.2))).status).toBe(200);
+  });
+
+  it('limits settings changes per signer and action', async () => {
+    const handler = gateway({ settingsPerHour: 1 });
+    expect((await push(handler, RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate', delegate(stranger.address, '0.1')))).status).toBe(200);
+    const again = message(operator, RELAY_REWARDS, 'Set-Delegate', delegate(stranger.address, '0.2'));
+    expect(await refusal(await push(handler, RELAY_REWARDS, again))).toEqual([429, 'too many Set-Delegate messages from this signer']);
+    expect((await push(handler, STAKING_REWARDS, setShare(0.1))).status).toBe(200);
+  });
+
+  it('counts settings changes only for operators', async () => {
+    const handler = gateway({ settingsPerHour: 1 });
+    expect((await push(handler, RELAY_REWARDS, message(stranger, RELAY_REWARDS, 'Set-Delegate'))).status).toBe(403);
+    expect((await push(handler, RELAY_REWARDS, message(stranger, RELAY_REWARDS, 'Set-Delegate', delegate(operator.address, '0.1')))).status).toBe(403);
   });
 });
 

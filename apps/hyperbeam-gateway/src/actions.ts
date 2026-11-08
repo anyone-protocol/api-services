@@ -25,6 +25,8 @@ interface CommonSpec {
   action: string;
   tags: Record<string, TagRule>;
   data: DataRule;
+  setting?: boolean;
+  refine?: (tags: ReadonlyMap<string, string>) => string | undefined;
 }
 
 export type ActionSpec = (CommonSpec & { audience: 'operator'; check: OperatorCheck }) | (CommonSpec & { audience: 'admin' });
@@ -93,6 +95,8 @@ export const ACTIONS: readonly ActionSpec[] = [
     tags: { address: optional(isAddress), share: optional(share) },
     data: { kind: 'none' },
     check: isOperator,
+    setting: true,
+    refine: (tags) => (tags.has('address') !== tags.has('share') ? 'Set-Delegate takes an address and a share together, or neither to reset' : undefined),
   },
   {
     process: 'staking-rewards',
@@ -101,6 +105,7 @@ export const ACTIONS: readonly ActionSpec[] = [
     tags: {},
     data: { kind: 'json', maxBytes: KIB, valid: (value) => isRecord(value) && hasOnlyKeys(value, ['Share']) && typeof value.Share === 'number' && Number.isFinite(value.Share), description: 'a JSON object { Share: number }' },
     check: isOperator,
+    setting: true,
   },
   admin('operator-registry', 'Admin-Submit-Operator-Certificates', {}, certificates),
   admin('operator-registry', 'Remove-Fingerprint-Certificate', { fingerprint: required(fingerprint) }),
@@ -160,6 +165,8 @@ export function validateMessage(spec: ActionSpec, tags: ReadonlyMap<string, stri
   for (const [name, rule] of Object.entries(rules)) {
     if (rule.required && !tags.has(name)) throw new InvalidMessage(`tag ${name} is required for ${spec.action}`);
   }
+  const problem = spec.refine?.(tags);
+  if (problem) throw new InvalidMessage(problem);
   validateData(spec, data);
 }
 
