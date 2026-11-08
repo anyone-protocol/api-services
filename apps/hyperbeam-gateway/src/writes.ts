@@ -2,6 +2,7 @@ import type { Logger } from '@anyone-protocol/service-kit';
 import { type ActionSpec, actionKey, findAction, InvalidMessage, messageTags, type OperatorEntry, type ProcessName, validateMessage } from './actions';
 import { type DataItem, InvalidDataItem, parseDataItem, verifySigner } from './ans104';
 import { type HyperbeamNode, NodeUnavailable, type NodeResponse } from './node';
+import type { OperatorDirectory } from './operators';
 import type { ProcessIds } from './processes';
 import type { RateLimiter } from './rate-limit';
 import type { AcceptedMessage, MessageStore } from './store';
@@ -17,6 +18,8 @@ export interface WriteOptions {
   store: MessageStore;
   admin: AdminPolicy;
   limiter: RateLimiter;
+  operators: OperatorDirectory;
+  newSigners: RateLimiter;
   roles: RolesCache;
   logger: Logger;
   now?: () => number;
@@ -25,6 +28,8 @@ export interface WriteOptions {
 export type WriteResult = { kind: 'refused'; status: number; reason: string } | { kind: 'answered'; response: NodeResponse; repeat: boolean };
 
 type RoleTable = Record<string, Record<string, unknown>>;
+
+const NEW_SIGNERS = 'new-signers';
 
 export class RolesCache {
   private readonly entries = new Map<string, { expiresAt: number; roles: Promise<RoleTable> }>();
@@ -135,8 +140,10 @@ export class WriteHandler {
 
   private async authorize(spec: ActionSpec, signer: string, tags: ReadonlyMap<string, string>): Promise<void> {
     if (spec.audience === 'operator') {
+      if (!this.options.operators.has(signer) && !this.options.newSigners.take(NEW_SIGNERS)) throw new Refusal(503, 'too many messages from new signers, retry shortly');
       const entry = await this.options.node.view<Record<string, unknown> | null>(this.options.processes.id('operator-registry'), 'operator', { address: signer });
       const operator: OperatorEntry = { claimable: setKeys(entry?.claimable), verified: setKeys(entry?.verified) };
+      if (operator.claimable.length > 0 || operator.verified.length > 0) this.options.operators.add(signer);
       const reason = spec.check(operator, tags);
       if (reason) throw new Refusal(403, reason);
       return;

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import type { Tag } from './ans104';
 import { createFetchHandler } from './app';
 import { HyperbeamNode } from './node';
+import { OperatorDirectory } from './operators';
 import { ProcessIds } from './processes';
 import { RateLimiter } from './rate-limit';
 import { ReadHandler } from './reads';
@@ -34,10 +35,20 @@ interface BuildOptions {
   adminActions?: string[];
   adminSigners?: string[];
   perMinute?: number;
+  newSignersPerMinute?: number;
+  operators?: OperatorDirectory;
 }
 
-function gateway({ adminActions = [], adminSigners = [], perMinute = 100 }: BuildOptions = {}) {
-  const hb = new HyperbeamNode({ url: node.url, readTimeoutMs: 5_000, writeTimeoutMs: 5_000 });
+function hyperbeam() {
+  return new HyperbeamNode({ url: node.url, readTimeoutMs: 5_000, writeTimeoutMs: 5_000 });
+}
+
+function directory() {
+  return new OperatorDirectory({ node: hyperbeam(), processId: OPERATOR_REGISTRY, refreshMs: 60_000, logger });
+}
+
+function gateway({ adminActions = [], adminSigners = [], perMinute = 100, newSignersPerMinute = 100, operators = directory() }: BuildOptions = {}) {
+  const hb = hyperbeam();
   const processes = new ProcessIds({ 'operator-registry': OPERATOR_REGISTRY, 'relay-rewards': RELAY_REWARDS, 'staking-rewards': STAKING_REWARDS });
   return createFetchHandler({
     maxBodyBytes: 64 * 1024,
@@ -49,6 +60,8 @@ function gateway({ adminActions = [], adminSigners = [], perMinute = 100 }: Buil
       store,
       admin: { actions: new Set(adminActions), signers: new Set(adminSigners) },
       limiter: new RateLimiter({ perMinute }),
+      operators,
+      newSigners: new RateLimiter({ perMinute: newSignersPerMinute, burst: newSignersPerMinute }),
       roles: new RolesCache(hb, 60_000),
       logger,
     }),
@@ -246,6 +259,54 @@ describe('repeated messages', () => {
     node.available = false;
     const body = message(operator, RELAY_REWARDS, 'Set-Delegate');
     expect((await push(gateway(), RELAY_REWARDS, body)).status).toBe(502);
+  });
+});
+
+describe('new signers', () => {
+  const delegate = (address: string) => [
+    { name: 'address', value: address },
+    { name: 'share', value: '0.5' },
+  ];
+  const operatorLookups = () => node.requests.filter((request) => request.path.includes('/as/operator?'));
+
+  it('checks signers it does not know within one shared allowance', async () => {
+    const handler = gateway({ newSignersPerMinute: 1 });
+    expect(await refusal(await push(handler, RELAY_REWARDS, message(stranger, RELAY_REWARDS, 'Set-Delegate')))).toEqual([403, 'signer is not a registered operator']);
+    expect(await refusal(await push(handler, RELAY_REWARDS, message(randomSigner(), RELAY_REWARDS, 'Set-Delegate')))).toEqual([503, 'too many messages from new signers, retry shortly']);
+    expect(operatorLookups()).toHaveLength(1);
+    expect(node.pushes()).toHaveLength(0);
+  });
+
+  it('does not count operators on the list it reads from operator-registry', async () => {
+    node.views.set(`${OPERATOR_REGISTRY}/as/operators`, { status: 200, body: JSON.stringify({ [operator.address]: true }) });
+    const operators = directory();
+    await operators.refresh();
+    const handler = gateway({ newSignersPerMinute: 1, operators });
+    await push(handler, RELAY_REWARDS, message(stranger, RELAY_REWARDS, 'Set-Delegate'));
+    expect((await push(handler, RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate'))).status).toBe(200);
+  });
+
+  it('remembers an operator after its first check', async () => {
+    const handler = gateway({ newSignersPerMinute: 1 });
+    expect((await push(handler, RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate'))).status).toBe(200);
+    expect((await push(handler, RELAY_REWARDS, message(operator, RELAY_REWARDS, 'Set-Delegate', delegate(stranger.address)))).status).toBe(200);
+  });
+
+  it('keeps the last operator list when a refresh fails', async () => {
+    node.views.set(`${OPERATOR_REGISTRY}/as/operators`, { status: 200, body: JSON.stringify({ [operator.address]: true }) });
+    const operators = directory();
+    await operators.refresh();
+    node.views.set(`${OPERATOR_REGISTRY}/as/operators`, { status: 500, body: '{}' });
+    await operators.refresh();
+    expect(operators.has(operator.address)).toBe(true);
+  });
+
+  it('reads an empty operator list', async () => {
+    node.views.set(`${OPERATOR_REGISTRY}/as/operators`, { status: 200, body: '[]' });
+    const operators = directory();
+    operators.add(operator.address);
+    await operators.refresh();
+    expect(operators.has(operator.address)).toBe(false);
   });
 });
 

@@ -18,6 +18,8 @@ export const gatewayEnv = {
   NODE_WRITE_TIMEOUT: env.durationMs({ default: 60_000 }),
   MAX_BODY_BYTES: env.integer({ default: 1_048_576 }),
   WRITES_PER_SIGNER_PER_MINUTE: env.integer({ default: 20 }),
+  NEW_SIGNER_CHECKS_PER_MINUTE: env.integer({ default: 120 }),
+  OPERATORS_REFRESH_INTERVAL: env.durationMs({ default: 60_000 }),
 };
 
 export type GatewayConfig = ReturnType<typeof loadConfig>;
@@ -40,7 +42,7 @@ export function loadConfig(source: Environment = process.env) {
     ...adminActions.map((key) => !ADMIN_ACTION_KEYS.has(key) && `ADMIN_ACTIONS entry ${key} is not a known admin action, expected one of ${[...ADMIN_ACTION_KEYS].join(', ')}`),
     ...adminSigners.map((address) => !isChecksumAddress(address) && `ADMIN_SIGNERS entry ${address} must be a checksummed address`),
     adminActions.length > 0 && adminSigners.length === 0 && 'ADMIN_ACTIONS needs at least one ADMIN_SIGNERS entry',
-    ...(['MAX_BODY_BYTES', 'WRITES_PER_SIGNER_PER_MINUTE', 'VIEW_CACHE_TTL', 'ROLES_CACHE_TTL', 'NODE_READ_TIMEOUT', 'NODE_WRITE_TIMEOUT'] as const).map(
+    ...(['MAX_BODY_BYTES', 'WRITES_PER_SIGNER_PER_MINUTE', 'NEW_SIGNER_CHECKS_PER_MINUTE', 'OPERATORS_REFRESH_INTERVAL', 'VIEW_CACHE_TTL', 'ROLES_CACHE_TTL', 'NODE_READ_TIMEOUT', 'NODE_WRITE_TIMEOUT'] as const).map(
       (name) => config[name] <= 0 && `${name} must be greater than 0`,
     ),
   ].filter(Boolean);

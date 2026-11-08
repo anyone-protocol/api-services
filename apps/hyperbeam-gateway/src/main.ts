@@ -4,6 +4,7 @@ import { createLogger, handleShutdownSignals, handleUncaughtErrors } from '@anyo
 import { startServer } from './app';
 import { loadConfig } from './config';
 import { HyperbeamNode } from './node';
+import { OperatorDirectory } from './operators';
 import { ProcessIds } from './processes';
 import { RateLimiter } from './rate-limit';
 import { ReadHandler } from './reads';
@@ -23,6 +24,9 @@ const processes = new ProcessIds({
   'staking-rewards': config.STAKING_REWARDS_PROCESS_ID,
 });
 
+const operators = new OperatorDirectory({ node, processId: config.OPERATOR_REGISTRY_PROCESS_ID, refreshMs: config.OPERATORS_REFRESH_INTERVAL, logger });
+operators.start();
+
 const server = startServer({
   port: config.PORT,
   maxBodyBytes: config.MAX_BODY_BYTES,
@@ -34,6 +38,8 @@ const server = startServer({
     store,
     admin: { actions: config.adminActions, signers: config.adminSigners },
     limiter: new RateLimiter({ perMinute: config.WRITES_PER_SIGNER_PER_MINUTE }),
+    operators,
+    newSigners: new RateLimiter({ perMinute: config.NEW_SIGNER_CHECKS_PER_MINUTE, burst: 10 }),
     roles: new RolesCache(node, config.ROLES_CACHE_TTL),
     logger,
   }),
@@ -52,6 +58,7 @@ logger.info('Listening', {
 handleShutdownSignals(
   [
     ['http server', () => server.stop()],
+    ['operator list', () => operators.stop()],
     ['message store', () => store.close()],
   ],
   { logger },

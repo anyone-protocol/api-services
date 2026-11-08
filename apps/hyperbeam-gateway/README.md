@@ -39,7 +39,7 @@ A message is a raw ANS-104 data item sent with `content-type: application/ans104
 5. The tags are exactly `type=Message`, `data-protocol=ao`, `variant=ao.N.1`, `action`, the action's own tags, and optionally `require-codec=application/json` and `ui-cache-key`. Tag names match in any case and may not repeat. The data has the shape the action takes.
 6. A message whose id the gateway has already sent and the node accepted, or is sending now, is answered with that answer and not sent again. See [Message record](#message-record).
 7. A signer may send `WRITES_PER_SIGNER_PER_MINUTE` messages a minute.
-8. The signer is allowed to send the action, see below.
+8. The signer is allowed to send the action, see below. A signer the gateway does not know as an operator is checked within an allowance of `NEW_SIGNER_CHECKS_PER_MINUTE` checks a minute shared by all such signers; past it, the message answers `503` before the node is asked.
 
 Then the gateway posts the item's original bytes to the node with only the `content-type` and `codec-device` headers.
 
@@ -55,6 +55,8 @@ Always available. The gateway reads the signer's entry from operator-registry's 
 | staking-rewards | `Set-Share` | none | `{ "Share": <number> }` | be an operator |
 
 An operator is an address with at least one claimable or verified fingerprint. The contract still makes its own checks, for example a blocked address or a missing registration credit.
+
+The gateway knows as operators the addresses in operator-registry's `operators` view, read at start and every `OPERATORS_REFRESH_INTERVAL`, and any signer it has found to be an operator since the last read. Their messages do not count against the new signer allowance, so messages signed with fresh keys cannot crowd out existing operators or load the node beyond that allowance.
 
 ### Admin actions
 
@@ -106,5 +108,7 @@ bun run --filter hyperbeam-gateway dev
 | `NODE_WRITE_TIMEOUT` | `60s` | time allowed for the node to accept a message |
 | `MAX_BODY_BYTES` | `1048576` | largest message accepted |
 | `WRITES_PER_SIGNER_PER_MINUTE` | `20` | messages a signer may send per minute |
+| `NEW_SIGNER_CHECKS_PER_MINUTE` | `120` | operator checks a minute, shared by all signers the gateway does not know as operators, in bursts of up to 10 |
+| `OPERATORS_REFRESH_INTERVAL` | `60s` | how often the operator list is read from operator-registry |
 
 Plus `PORT` and `LOG_LEVEL`, as for every service in this repository.
