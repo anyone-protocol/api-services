@@ -1,6 +1,7 @@
 variable "commit_sha" {
   type        = string
   description = "Commit whose hyperbeam-gateway image to run"
+  default     = "8a4c00939b3438b262f70ae44f7122166fb6152c"
 }
 
 job "hyperbeam-gateway-stage" {
