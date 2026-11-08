@@ -50,7 +50,14 @@ job "hyperbeam-gateway-live" {
         "traefik-ec.http.routers.hyperbeam-gateway-live.middlewares=hyperbeam-gateway-live-ratelimit,hyperbeam-gateway-live-buffering",
         "traefik-ec.http.middlewares.hyperbeam-gateway-live-ratelimit.ratelimit.average=30",
         "traefik-ec.http.middlewares.hyperbeam-gateway-live-ratelimit.ratelimit.burst=60",
-        "traefik-ec.http.middlewares.hyperbeam-gateway-live-buffering.buffering.maxrequestbodybytes=1048576"
+        "traefik-ec.http.middlewares.hyperbeam-gateway-live-buffering.buffering.maxrequestbodybytes=1048576",
+        "traefik-ec.http.routers.hyperbeam-gateway-live-push.rule=Host(`hb.anyone.tech`) && Method(`POST`)",
+        "traefik-ec.http.routers.hyperbeam-gateway-live-push.entrypoints=https",
+        "traefik-ec.http.routers.hyperbeam-gateway-live-push.tls=true",
+        "traefik-ec.http.routers.hyperbeam-gateway-live-push.tls.certresolver=anyoneresolver",
+        "traefik-ec.http.routers.hyperbeam-gateway-live-push.middlewares=hyperbeam-gateway-live-push-ratelimit,hyperbeam-gateway-live-buffering",
+        "traefik-ec.http.middlewares.hyperbeam-gateway-live-push-ratelimit.ratelimit.average=2",
+        "traefik-ec.http.middlewares.hyperbeam-gateway-live-push-ratelimit.ratelimit.burst=20"
       ]
 
       check {

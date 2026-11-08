@@ -5,6 +5,7 @@ interface Bucket {
 
 export interface RateLimiterOptions {
   perMinute: number;
+  burst?: number;
   now?: () => number;
   maxKeys?: number;
 }
@@ -23,9 +24,9 @@ export class RateLimiter {
 
   take(key: string): boolean {
     const now = this.now();
-    const capacity = this.options.perMinute;
-    const bucket = this.buckets.get(key) ?? { tokens: capacity, updatedAt: now };
-    bucket.tokens = Math.min(capacity, bucket.tokens + ((now - bucket.updatedAt) / MINUTE_MS) * capacity);
+    const { perMinute, burst = perMinute } = this.options;
+    const bucket = this.buckets.get(key) ?? { tokens: burst, updatedAt: now };
+    bucket.tokens = Math.min(burst, bucket.tokens + ((now - bucket.updatedAt) / MINUTE_MS) * perMinute);
     bucket.updatedAt = now;
 
     const allowed = bucket.tokens >= 1;

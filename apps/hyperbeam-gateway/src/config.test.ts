@@ -15,6 +15,8 @@ describe('loadConfig', () => {
     expect(config.adminActions.size).toBe(0);
     expect(config.VIEW_CACHE_TTL).toBe(30_000);
     expect(config.NODE_WRITE_TIMEOUT).toBe(60_000);
+    expect(config.NEW_SIGNER_CHECKS_PER_MINUTE).toBe(120);
+    expect(config.OPERATORS_REFRESH_INTERVAL).toBe(60_000);
   });
 
   it('reads admin actions and signers', () => {
@@ -31,6 +33,10 @@ describe('loadConfig', () => {
   it('refuses admin actions that are unknown or controller only', () => {
     expect(() => loadConfig({ ...BASE, ADMIN_ACTIONS: 'relay-rewards:Add-Scores', ADMIN_SIGNERS: TEAM })).toThrow('ADMIN_ACTIONS entry relay-rewards:Add-Scores is not a known admin action');
     expect(() => loadConfig({ ...BASE, ADMIN_ACTIONS: 'relay-rewards:Set-Delegate', ADMIN_SIGNERS: TEAM })).toThrow('is not a known admin action');
+  });
+
+  it('refuses limits that are not positive', () => {
+    expect(() => loadConfig({ ...BASE, NEW_SIGNER_CHECKS_PER_MINUTE: '0' })).toThrow('NEW_SIGNER_CHECKS_PER_MINUTE must be greater than 0');
   });
 
   it('refuses admin signers that are not checksummed and admin actions without signers', () => {
