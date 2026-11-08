@@ -1,6 +1,6 @@
 import type { Logger } from '@anyone-protocol/service-kit';
 import { type ActionSpec, actionKey, findAction, InvalidMessage, messageTags, type OperatorEntry, type ProcessName, validateMessage } from './actions';
-import { type DataItem, InvalidDataItem, parseDataItem, verifySigner } from './ans104';
+import { checksumAddress, type DataItem, InvalidDataItem, parseDataItem, verifySigner } from './ans104';
 import { type HyperbeamNode, NodeUnavailable, type NodeResponse } from './node';
 import type { OperatorDirectory } from './operators';
 import type { ProcessIds } from './processes';
@@ -20,6 +20,7 @@ export interface WriteOptions {
   limiter: RateLimiter;
   operators: OperatorDirectory;
   newSigners: RateLimiter;
+  settings: RateLimiter;
   roles: RolesCache;
   logger: Logger;
   now?: () => number;
@@ -138,7 +139,7 @@ export class WriteHandler {
     throw error;
   }
 
-  private async authorize(spec: ActionSpec, signer: string, tags: ReadonlyMap<string, string>): Promise<void> {
+  private async authorize(spec: ActionSpec, signer: string, tags: ReadonlyMap<string, string>, data: Uint8Array): Promise<void> {
     if (spec.audience === 'operator') {
       if (!this.options.operators.has(signer) && !this.options.newSigners.take(NEW_SIGNERS)) throw new Refusal(503, 'too many messages from new signers, retry shortly');
       const entry = await this.options.node.view<Record<string, unknown> | null>(this.options.processes.id('operator-registry'), 'operator', { address: signer });
@@ -146,6 +147,10 @@ export class WriteHandler {
       if (operator.claimable.length > 0 || operator.verified.length > 0) this.options.operators.add(signer);
       const reason = spec.check(operator, tags);
       if (reason) throw new Refusal(403, reason);
+      if (spec.setting) {
+        if (!this.options.settings.take(`${signer}:${spec.action}`)) throw new Refusal(429, `too many ${spec.action} messages from this signer`);
+        await this.refuseUnchanged(spec, signer, tags, data);
+      }
       return;
     }
 
@@ -155,8 +160,32 @@ export class WriteHandler {
     if (!holdsRole) throw new Refusal(403, `signer does not hold the admin or ${spec.action} role`);
   }
 
+  private async refuseUnchanged(spec: ActionSpec, signer: string, tags: ReadonlyMap<string, string>, data: Uint8Array): Promise<void> {
+    if (spec.action === 'Set-Delegate') {
+      const current = await this.options.node.view<{ Address?: unknown; Share?: unknown } | null>(this.options.processes.id('relay-rewards'), 'delegate', { address: signer });
+      const currentAddress = typeof current?.Address === 'string' ? current.Address : '';
+      const address = tags.get('address');
+      if (address === undefined) {
+        if (currentAddress === '') throw new Refusal(409, 'the signer has no delegate to reset');
+      } else if (checksumAddress(address) === currentAddress && Number(tags.get('share')) === current?.Share) {
+        throw new Refusal(409, 'the delegate is already set to that address and share');
+      }
+      return;
+    }
+
+    if (spec.action === 'Set-Share') {
+      const staking = this.options.processes.id('staking-rewards');
+      const status = await this.options.node.view<{ sharesEnabled?: unknown; setSharesEnabled?: unknown } | null>(staking, 'status');
+      if (status?.sharesEnabled !== true || status?.setSharesEnabled !== true) throw new Refusal(403, 'staking-rewards does not accept share changes');
+      const current = await this.options.node.view<{ share?: unknown; pending?: { Share?: unknown } } | null>(staking, 'shares', { address: signer });
+      const target = current?.pending && typeof current.pending === 'object' ? current.pending.Share : current?.share;
+      const requested = (JSON.parse(new TextDecoder().decode(data)) as { Share: number }).Share;
+      if (typeof target === 'number' && target === requested) throw new Refusal(409, 'the share is already set to that value');
+    }
+  }
+
   private async authorizeAndForward(spec: ActionSpec, signer: string, tags: ReadonlyMap<string, string>, processId: string, item: DataItem, raw: Uint8Array): Promise<WriteResult> {
-    await this.authorize(spec, signer, tags);
+    await this.authorize(spec, signer, tags, item.data);
     const response = await this.options.node.push(processId, raw);
     const slot = responseSlot(response);
     const accepted: AcceptedMessage = {

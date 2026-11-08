@@ -40,6 +40,7 @@ const server = startServer({
     limiter: new RateLimiter({ perMinute: config.WRITES_PER_SIGNER_PER_MINUTE }),
     operators,
     newSigners: new RateLimiter({ perMinute: config.NEW_SIGNER_CHECKS_PER_MINUTE, burst: 10 }),
+    settings: new RateLimiter({ perMinute: config.SETTINGS_CHANGES_PER_SIGNER_PER_HOUR / 60, burst: config.SETTINGS_CHANGES_PER_SIGNER_PER_HOUR }),
     roles: new RolesCache(node, config.ROLES_CACHE_TTL),
     logger,
   }),

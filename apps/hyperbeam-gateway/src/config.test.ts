@@ -16,6 +16,7 @@ describe('loadConfig', () => {
     expect(config.VIEW_CACHE_TTL).toBe(30_000);
     expect(config.NODE_WRITE_TIMEOUT).toBe(60_000);
     expect(config.NEW_SIGNER_CHECKS_PER_MINUTE).toBe(120);
+    expect(config.SETTINGS_CHANGES_PER_SIGNER_PER_HOUR).toBe(6);
     expect(config.OPERATORS_REFRESH_INTERVAL).toBe(60_000);
   });
 
